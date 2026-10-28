@@ -237,7 +237,7 @@ Contenido de la vista de partida: última jugada (grande), mi tiempo, tiempo del
 5. **Ajustes**: salida/adaptador, sensibilidad de estabilidad, promoción por defecto, sonidos, idioma, tema, siempre arriba, modo compacto.
 6. **Diagnóstico** (dentro de Ajustes): fps, latencia, tráfico del protocolo en crudo y decodificado.
 
-Hay un artifact de diseño con cada estado y pantalla en progreso; cuando exista, se referencia acá.
+Diseño de referencia (una pantalla por estado): https://claude.ai/artifact/AF5QgG3z8ddDoGfvkNUbUS — privado del autor; pedí acceso si no lo podés abrir.
 
 ---
 
