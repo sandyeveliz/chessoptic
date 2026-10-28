@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Modo compacto</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&amp;family=IBM+Plex+Sans:wght@400;600&amp;family=IBM+Plex+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1172B3}a:hover{color:#0B5687}
+.p{width:380px;height:260px;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;padding:12px;background:#F2F4F7;color:#1D2330;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;line-height:1.4;overflow:hidden}
+.brand{display:flex;align-items:center;gap:8px;font-family:'Sora',sans-serif;font-weight:600;font-size:14px}
+.brand b{color:#1172B3;font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.ok{background:#E3F4EA;color:#17663A}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.cam{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));border-radius:4px;overflow:hidden;border:1px solid #C3CBD6}
+.mono{font-family:'IBM Plex Mono',monospace}
+.ib{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;border:1px solid #C3CBD6;background:#FFFFFF;color:#3A4252;cursor:pointer}
+</style>
+</helmet>
+<div class="p">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div class="brand"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5" stroke="#1E96D7" stroke-width="2"></path><circle cx="12" cy="12" r="4.5" fill="#1D2330"></circle></svg><span>Chess<b>Optic</b></span></div>
+<div style="display:flex;align-items:center;gap:6px"><span class="pill ok"><span class="dot"></span>OK</span><button class="ib" aria-label="Expandir panel"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg></button></div>
+</div>
+<div style="display:flex;gap:10px;flex-grow:1">
+<div style="flex-grow:1;background:#1172B3;color:#FFFFFF;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between">
+<div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:700">Tu turno</div>
+<div style="display:flex;gap:14px;align-items:baseline"><span class="mono" style="font-size:26px;font-weight:600">04:12</span><span class="mono" style="font-size:15px">03:58</span></div>
+<div>Rival: <b class="mono">3… Cf6</b></div>
+</div>
+<div style="width:150px;display:flex;flex-direction:column;gap:4px">
+<div class="cam">
+<sc-for list="{{cells}}" as="c" hint-placeholder-count="64"><div style="{{c.sq}}"><div style="{{c.pc}}"></div></div></sc-for>
+</div>
+<div style="font-size:11px;color:#5B6474">Cámara · 97%</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":380,"height":260}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rows = ['b.bbbb.b','bbbb.bbb','..b..b..','....b...','..w.w...','.....w..','wwww.www','wwwww..w'];
+    const hi = { g8: '#BFDDF2', f6: '#9FCBEA' };
+    const files = 'abcdefgh';
+    const cells = [];
+    rows.forEach((row, r) => {
+      for (let f = 0; f < 8; f++) {
+        const ch = row[f];
+        const n = files[f] + (8 - r);
+        const dark = (r + f) % 2 === 1;
+        cells.push({
+          sq: { display: 'flex', alignItems: 'center', justifyContent: 'center', aspectRatio: '1 / 1', background: hi[n] || (dark ? '#C7D1DD' : '#EAEEF3') },
+          pc: ch === '.' ? { display: 'none' } : { width: '60%', height: '60%', borderRadius: '50%', boxSizing: 'border-box', background: ch === 'w' ? '#FFFFFF' : '#1D2330', border: ch === 'w' ? '1px solid #5B6474' : '1px solid #1D2330' }
+        });
+      }
+    });
+    return { cells };
+  }
+}
+</script>
+</body>
+</html>

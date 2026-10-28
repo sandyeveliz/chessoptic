@@ -1,6 +1,7 @@
 # CLAUDE.md — ChessOptic
 
 Contexto completo del proyecto y decisiones: **lee `docs/PLAN.md` antes de cualquier tarea.**
+Especificación de la interfaz (pantallas, estados, tokens): `docs/UI.md`; mockups de referencia en `docs/design/`.
 
 ## Resumen en una línea
 ChessOptic es el driver de un tablero electrónico de ajedrez cuyo sensor es una webcam: ve el tablero físico, mantiene la posición y la entrega a plataformas (Lichess, Chessconnect → chess.com, Stockfish local) mediante adaptadores. Python + OpenCV + python-chess + PySide6. Open source (Apache-2.0), multiplataforma.

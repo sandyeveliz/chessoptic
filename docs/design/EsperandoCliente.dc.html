@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Esperando cliente</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&amp;family=IBM+Plex+Sans:wght@400;600&amp;family=IBM+Plex+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1172B3}a:hover{color:#0B5687}
+.p{width:380px;height:860px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;background:#F2F4F7;color:#1D2330;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;line-height:1.4;overflow:hidden}
+.hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#FFFFFF;border-bottom:1px solid #DCE1E8}
+.brand{display:flex;align-items:center;gap:8px;font-family:'Sora',sans-serif;font-weight:600;font-size:15px}
+.brand b{color:#1172B3;font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.warn{background:#FDF1DC;color:#8A5A0B}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.hs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:0 16px}
+.hi{display:flex;flex-direction:column;gap:2px;padding:8px 10px;background:#FFFFFF;border:1px solid #DCE1E8;border-radius:8px;font-size:12px}
+.hi span{display:flex;align-items:center;gap:6px;font-weight:600}
+.hi small{color:#5B6474;font-size:11px}
+.sec{padding:0 16px;display:flex;flex-direction:column;gap:8px}
+.mono{font-family:'IBM Plex Mono',monospace}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-weight:600}
+.field select{min-height:40px;border:1px solid #C3CBD6;border-radius:8px;padding:0 10px;font:inherit;background:#FFFFFF;color:#1D2330}
+.steps{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.steps li{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#FFFFFF;border:1px solid #DCE1E8;border-radius:8px}
+.steps b.n{flex:none;width:22px;height:22px;border-radius:50%;background:#E3EEF7;color:#1172B3;display:flex;align-items:center;justify-content:center;font-size:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:0 14px;border-radius:8px;border:1px solid #C3CBD6;background:#FFFFFF;color:#1D2330;font:inherit;font-weight:600;cursor:pointer}
+</style>
+</helmet>
+<div class="p">
+<header class="hd">
+<div class="brand"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5" stroke="#1E96D7" stroke-width="2"></path><circle cx="12" cy="12" r="4.5" fill="#1D2330"></circle></svg><span>Chess<b>Optic</b></span></div>
+<span class="pill warn"><span class="dot"></span>Esperando cliente</span>
+</header>
+<div class="hs">
+<div class="hi"><span><span class="dot" style="color:#1F8A4C"></span>Cámara</span><small>30 fps</small></div>
+<div class="hi"><span><span class="dot" style="color:#1F8A4C"></span>Tablero</span><small>Posición inicial</small></div>
+<div class="hi" style="border-color:#E2B866"><span><span class="dot" style="color:#B7791F"></span>Enlace</span><small>Anunciando…</small></div>
+</div>
+<div class="sec">
+<div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:700">Conectá una plataforma</div>
+<div class="field"><label for="out-sel">Salida</label>
+<select id="out-sel"><option>Chessconnect · Bluetooth</option><option>Chessconnect · puerto serie</option><option>Lichess (Board API)</option><option>Stockfish local</option></select></div>
+<div style="display:flex;align-items:center;gap:10px;background:#FFFFFF;border:1px dashed #1E96D7;border-radius:8px;padding:10px 12px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1172B3" stroke-width="2" aria-hidden="true"><path d="M7 7l10 10-5 5V2l5 5L7 17"></path></svg>
+<div>Anunciándose como <b class="mono">ChessOptic-4F2A</b><div style="font-size:12px;color:#5B6474">Visible por Bluetooth en esta PC y en el celular</div></div>
+</div>
+</div>
+<div class="sec">
+<div style="font-weight:600">En chess.com</div>
+<ol class="steps">
+<li><b class="n">1</b><span>Abrí chess.com en Chrome con la extensión Chessconnect.</span></li>
+<li><b class="n">2</b><span>Apretá <b>Connect</b> (a la izquierda del tablero).</span></li>
+<li><b class="n">3</b><span>Elegí <b class="mono">ChessOptic-4F2A</b> en la lista de dispositivos.</span></li>
+</ol>
+<div style="font-size:12px;color:#5B6474">¿Jugás desde el celular? Abrí la app Chessconnect y elegí el mismo dispositivo.</div>
+</div>
+<div class="sec" style="margin-top:auto;padding-bottom:16px">
+<div style="display:flex;gap:8px"><button class="btn" style="flex:1">Ver guía completa</button><button class="btn">Cambiar salida</button></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":380,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

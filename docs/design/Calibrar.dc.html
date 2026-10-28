@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Calibración</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&amp;family=IBM+Plex+Sans:wght@400;600&amp;family=IBM+Plex+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1172B3}a:hover{color:#0B5687}
+.p{width:380px;height:860px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;background:#F2F4F7;color:#1D2330;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;line-height:1.4;overflow:hidden}
+.hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#FFFFFF;border-bottom:1px solid #DCE1E8}
+.brand{display:flex;align-items:center;gap:8px;font-family:'Sora',sans-serif;font-weight:600;font-size:15px}
+.brand b{color:#1172B3;font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.idle{background:#E8EBF0;color:#4A5262}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.sec{padding:0 16px;display:flex;flex-direction:column;gap:8px}
+.mono{font-family:'IBM Plex Mono',monospace}
+.bar{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+.bar span{height:4px;border-radius:2px;background:#C3CBD6}
+.corners{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.corners div{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#FFFFFF;border:1px solid #DCE1E8;border-radius:8px}
+.radio{display:flex;flex-direction:column;gap:6px}
+.radio label{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 10px;background:#FFFFFF;border:1px solid #DCE1E8;border-radius:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:0 14px;border-radius:8px;border:1px solid #C3CBD6;background:#FFFFFF;color:#1D2330;font:inherit;font-weight:600;cursor:pointer}
+.btn.pri{background:#1172B3;border-color:#1172B3;color:#FFFFFF}
+</style>
+</helmet>
+<div class="p">
+<header class="hd">
+<div class="brand"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5" stroke="#1E96D7" stroke-width="2"></path><circle cx="12" cy="12" r="4.5" fill="#1D2330"></circle></svg><span>Chess<b>Optic</b></span></div>
+<span class="pill idle"><span class="dot"></span>Sin calibrar</span>
+</header>
+<div class="sec">
+<div class="bar"><span style="background:#1172B3"></span><span style="background:#1172B3"></span><span style="background:#1172B3"></span><span></span><span></span><span></span></div>
+<div style="font-size:12px;color:#5B6474">Paso 3 de 6 · Calibración</div>
+<div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:700">Marcá las 4 esquinas</div>
+<div style="color:#5B6474">Tocá las esquinas exteriores de la zona de juego en la imagen. Podés arrastrarlas para ajustar.</div>
+</div>
+<div class="sec">
+<div style="position:relative;aspect-ratio:4 / 3;max-width:100%;background:#2A303B;border-radius:8px;overflow:hidden">
+<svg viewBox="0 0 400 300" width="100%" height="100%" role="img" aria-label="Imagen de la cámara con el tablero marcado por cuatro esquinas">
+<rect x="0" y="0" width="400" height="300" fill="#2A303B"></rect>
+<polygon points="92,52 318,48 362,262 46,268" fill="#8A6F55" stroke="none"></polygon>
+<polygon points="92,52 318,48 362,262 46,268" fill="none" stroke="#1E96D7" stroke-width="2"></polygon>
+<path d="M120,51 L85,267 M148,51 L124,266 M177,50 L164,266 M205,50 L204,265 M233,49 L243,265 M262,49 L283,264 M290,48 L322,263 M86,79 L323,75 M81,105 L329,101 M75,132 L334,128 M69,159 L340,155 M64,186 L345,182 M58,213 L351,209 M52,240 L356,236" stroke="#6C5642" stroke-width="1"></path>
+<circle cx="92" cy="52" r="9" fill="#1E96D7" stroke="#FFFFFF" stroke-width="2"></circle>
+<circle cx="318" cy="48" r="9" fill="#1E96D7" stroke="#FFFFFF" stroke-width="2"></circle>
+<circle cx="362" cy="262" r="9" fill="#1E96D7" stroke="#FFFFFF" stroke-width="2"></circle>
+<circle cx="46" cy="268" r="9" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-dasharray="4 3"></circle>
+</svg>
+</div>
+<div class="corners">
+<div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1F8A4C" stroke-width="3" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg>Arriba izq.</div>
+<div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1F8A4C" stroke-width="3" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg>Arriba der.</div>
+<div style="border-color:#1E96D7;font-weight:600">Abajo izq. · tocá</div>
+<div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1F8A4C" stroke-width="3" aria-hidden="true"><path d="M4 12l5 5L20 6"></path></svg>Abajo der.</div>
+</div>
+</div>
+<div class="sec">
+<div style="font-weight:600">¿Dónde está la casilla a1?</div>
+<div class="radio">
+<label for="a1-bl"><input type="radio" id="a1-bl" name="a1" checked>Abajo a la izquierda (juego con blancas)</label>
+<label for="a1-tr"><input type="radio" id="a1-tr" name="a1">Arriba a la derecha (juego con negras)</label>
+</div>
+</div>
+<div class="sec" style="margin-top:auto;padding-bottom:16px">
+<div style="display:flex;gap:8px"><button class="btn">Atrás</button><button class="btn pri" style="flex:1">Confirmar esquinas</button></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":380,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

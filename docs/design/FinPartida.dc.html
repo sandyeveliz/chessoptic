@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Fin de partida</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&amp;family=IBM+Plex+Sans:wght@400;600&amp;family=IBM+Plex+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1172B3}a:hover{color:#0B5687}
+.p{width:380px;height:860px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;background:#F2F4F7;color:#1D2330;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;line-height:1.4;overflow:hidden}
+.hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#FFFFFF;border-bottom:1px solid #DCE1E8}
+.brand{display:flex;align-items:center;gap:8px;font-family:'Sora',sans-serif;font-weight:600;font-size:15px}
+.brand b{color:#1172B3;font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.ok{background:#E3F4EA;color:#17663A}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.sec{padding:0 16px;display:flex;flex-direction:column;gap:8px}
+.lbl{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5B6474;font-weight:600}
+.cam{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));border-radius:6px;overflow:hidden;border:1px solid #C3CBD6}
+.mono{font-family:'IBM Plex Mono',monospace}
+.prog{height:8px;border-radius:4px;background:#DCE1E8;overflow:hidden}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:0 14px;border-radius:8px;border:1px solid #C3CBD6;background:#FFFFFF;color:#1D2330;font:inherit;font-weight:600;cursor:pointer}
+.btn.pri{background:#1172B3;border-color:#1172B3;color:#FFFFFF}
+</style>
+</helmet>
+<div class="p">
+<header class="hd">
+<div class="brand"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5" stroke="#1E96D7" stroke-width="2"></path><circle cx="12" cy="12" r="4.5" fill="#1D2330"></circle></svg><span>Chess<b>Optic</b></span></div>
+<span class="pill ok"><span class="dot"></span>Driver OK</span>
+</header>
+<div class="sec">
+<div style="background:#FFFFFF;border:1px solid #DCE1E8;border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5B6474;font-weight:600">Partida terminada</div>
+<div style="display:flex;align-items:baseline;gap:10px"><span class="mono" style="font-size:32px;font-weight:600">1–0</span><span>Ganaste por abandono</span></div>
+<div style="color:#5B6474">28 jugadas · 12 min · 0 errores de detección</div>
+<div style="display:flex;gap:8px"><button class="btn pri" style="flex:1">Exportar PGN</button><button class="btn">Ver log</button></div>
+</div>
+</div>
+<div class="sec">
+<div style="font-family:'Sora',sans-serif;font-size:18px;font-weight:700">Reordená el tablero</div>
+<div style="display:flex;justify-content:space-between"><span>Piezas en su lugar</span><b class="mono">27 / 32</b></div>
+<div class="prog"><div style="width:84%;height:100%;background:#1172B3"></div></div>
+<div style="font-size:12px;color:#5B6474">Las casillas marcadas tienen piezas fuera de lugar. Cuando la posición inicial esté completa, ChessOptic queda listo para la próxima.</div>
+</div>
+<div class="sec">
+<div class="lbl"><span>Cámara · vista rectificada</span><span>2 fuera de lugar</span></div>
+<div class="cam">
+<sc-for list="{{cells}}" as="c" hint-placeholder-count="64"><div style="{{c.sq}}"><div style="{{c.pc}}"></div></div></sc-for>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":380,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rows = ['bbbb.b.b','bbbbbb.b','........','...b....','....w...','........','wwwwww.w','ww.wwwww'];
+    const hi = { d5: '#F3D3A1', e4: '#F3D3A1' };
+    const files = 'abcdefgh';
+    const cells = [];
+    rows.forEach((row, r) => {
+      for (let f = 0; f < 8; f++) {
+        const ch = row[f];
+        const n = files[f] + (8 - r);
+        const dark = (r + f) % 2 === 1;
+        cells.push({
+          sq: { display: 'flex', alignItems: 'center', justifyContent: 'center', aspectRatio: '1 / 1', background: hi[n] || (dark ? '#C7D1DD' : '#EAEEF3') },
+          pc: ch === '.' ? { display: 'none' } : { width: '58%', height: '58%', borderRadius: '50%', boxSizing: 'border-box', background: ch === 'w' ? '#FFFFFF' : '#1D2330', border: ch === 'w' ? '2px solid #5B6474' : '2px solid #1D2330' }
+        });
+      }
+    });
+    return { cells };
+  }
+}
+</script>
+</body>
+</html>
