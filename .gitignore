@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local recordings used as fixtures live outside git for now (manifests are kept)
+tests/fixtures/**/*.mp4
+tests/fixtures/**/*.mov
+tests/fixtures/**/*.jpg
+tests/fixtures/**/*.png
