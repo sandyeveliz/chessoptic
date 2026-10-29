@@ -19,6 +19,8 @@ from chessoptic.core.runtime import CoreRuntime
 from chessoptic.ui.bridge import CoreBridge
 from chessoptic.ui.views.camera_tab import CameraTab
 from chessoptic.ui.views.live import LiveView
+from chessoptic.ui.views.log_tab import LogTab
+from chessoptic.ui.views.settings_tab import SettingsTab
 from chessoptic.ui.views.wizard import WizardView
 from chessoptic.ui.widgets.health_pill import HealthPill
 from chessoptic.ui.widgets.nav_bar import NavBar
@@ -56,15 +58,20 @@ class MainWindow(QMainWindow):
         shell_layout.setContentsMargins(0, 0, 0, 0)
         shell_layout.setSpacing(0)
         self._pages = QStackedWidget(shell)
-        self._live = LiveView(self._bridge, shell)
+        self._live = LiveView(runtime, self._bridge, shell)
         self._live.recalibrate_requested.connect(lambda: self.start_wizard(0))
         self._camera_tab = CameraTab(runtime, self._bridge, shell)
         self._camera_tab.recalibrate_requested.connect(lambda: self.start_wizard(2))
         self._camera_tab.recheck_requested.connect(lambda: self.start_wizard(3))
+        self._log_tab = LogTab(self._bridge, shell)
+        self._log_tab.export_pgn.connect(self._live.export_pgn)
+        self._settings_tab = SettingsTab(runtime, shell)
+        self._settings_tab.always_on_top_changed.connect(self.set_always_on_top)
+        self._settings_tab.provider_changed.connect(lambda name: runtime.start_session(name))
         self._pages.addWidget(self._live)
         self._pages.addWidget(self._camera_tab)
-        self._pages.addWidget(self._placeholder("Log"))
-        self._pages.addWidget(self._placeholder("Ajustes"))
+        self._pages.addWidget(self._log_tab)
+        self._pages.addWidget(self._settings_tab)
         shell_layout.addWidget(self._pages, 1)
         self._nav = NavBar(shell)
         self._nav.page_selected.connect(self._pages.setCurrentIndex)
@@ -97,20 +104,6 @@ class MainWindow(QMainWindow):
         self._pill = HealthPill(header)
         layout.addWidget(self._pill)
         return header
-
-    def _placeholder(self, label: str) -> QWidget:
-        page = QWidget(self)
-        page.setObjectName("page")
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(16, 16, 16, 16)
-        title = QLabel(label.upper(), page)
-        title.setObjectName("sectionLabel")
-        hint = QLabel("Próximamente", page)
-        hint.setObjectName("muted")
-        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
-        layout.addWidget(hint, 1)
-        return page
 
     # ---- modes -------------------------------------------------------------
 

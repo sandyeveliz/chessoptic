@@ -6,6 +6,7 @@ import logging
 import threading
 from collections.abc import Callable
 
+from chessoptic.adapters import create_adapter
 from chessoptic.capture.webcam import CameraInfo, WebcamSource, list_cameras
 from chessoptic.core.bus import EventBus
 from chessoptic.core.config import (
@@ -21,10 +22,14 @@ from chessoptic.core.events import (
     CameraState,
     CameraStatus,
     ClassifierTrained,
+    DriverState,
+    Phase,
     SetupCheckReport,
 )
 from chessoptic.core.health import HealthAggregator
 from chessoptic.core.setup import SetupFlow
+from chessoptic.game.modes import get_mode
+from chessoptic.game.session import GameSession
 from chessoptic.vision.calibration import Calibration
 from chessoptic.vision.check import run_setup_check
 from chessoptic.vision.occupancy import OccupancyClassifier
@@ -43,6 +48,8 @@ class CoreRuntime:
         self.cameras: list[CameraInfo] = []
         self.camera: CameraInfo | None = None
         self.profile: CameraProfile | None = None
+        self.session: GameSession | None = None
+        self.bus.subscribe(DriverState, self._on_driver_state)
         self.pipeline.start()
 
     # ---- cameras ---------------------------------------------------------
@@ -94,6 +101,8 @@ class CoreRuntime:
         self.bus.publish(ClassifierTrained(bool(classifier and classifier.trained)))
         if classifier is not None and classifier.trained:
             self.setup.watch_initial_position(True)
+            if self.session is None:
+                self.start_session()
 
     # ---- calibration & setup ----------------------------------------------
 
@@ -144,6 +153,29 @@ class CoreRuntime:
         save_config(self.config)
         self.setup.stop_move_test()
         self.setup.watch_initial_position(True)
+        self.start_session(provider)
+
+    # ---- game session ----------------------------------------------------
+
+    def start_session(self, provider: str | None = None) -> GameSession:
+        """(Re)create the game session for `provider` (defaults to the configured one)."""
+        if self.session is not None:
+            self.session.stop()
+        name = provider or self.config.provider
+        adapter = create_adapter(name, self.config)
+        self.session = GameSession(
+            self.bus,
+            adapter,
+            get_mode("free"),
+            mismatch_grace_ms=2000,
+            promotion_default=self.config.promotion_default,
+        )
+        self.session.start()
+        return self.session
+
+    def _on_driver_state(self, state: DriverState) -> None:
+        # The initial-position check only matters while no game is running.
+        self.setup.watch_initial_position(state.phase == Phase.STANDBY)
 
     def set_camera_auto(self, what: str, enabled: bool) -> None:
         """Best-effort autofocus / autoexposure toggle; silently ignored if unsupported."""
@@ -166,4 +198,6 @@ class CoreRuntime:
     # ---- lifecycle -------------------------------------------------------
 
     def shutdown(self) -> None:
+        if self.session is not None:
+            self.session.stop()
         self.pipeline.stop()
