@@ -26,6 +26,7 @@ Estas respuestas reemplazan a las preguntas abiertas de la primera versión de e
 | **Plataforma base** | Windows 11. Tiene que seguir funcionando en macOS y Linux (CI en los tres). |
 | **Estilos de la UI** | PySide6 con **QSS (Qt Style Sheets, sintaxis tipo CSS)**. Tokens del diseño en código y una hoja de estilo que el usuario puede sobreescribir. |
 | **Código** | Buenas prácticas, patrones de diseño, escalable desde el primer PR aunque el MVP sea chico. |
+| **Alcance real: POC, no MVP** (2026-10-29, segunda ronda) | Lo que sigue es una **prueba de concepto**: si la v1 funciona bien, recién ahí se arma un MVP con lo demás. Consecuencias: (a) **sin tests por ahora**; la estrategia de §2.6 y las columnas "Cómo se testea" quedan como plan para después del POC, la verificación es manual corriendo la app; (b) **arquitectura mínima pero extensible**: se definen las interfaces (adaptadores, motores, fuentes, modos) y se implementa **solo lo que el POC usa**; nada de registros de plugins, entry points ni formularios generados hasta que haga falta un segundo proveedor; (c) CI solo con lint y tipos. |
 | **Carpeta de configuración** | `ChessOptic`. |
 | **Asyncio en hilo propio** (no `qasync`) | OK. |
 
@@ -193,7 +194,9 @@ Con `platformdirs`, app `ChessOptic`:
 
 `camera_key` = nombre del dispositivo + resolución (los índices de OpenCV cambian al enchufar cosas). `CHESSOPTIC_CONFIG_DIR` sobreescribe la carpeta (tests y CI).
 
-### 2.6 Tests sin cámara: tres capas
+### 2.6 Tests sin cámara: tres capas (plan para después del POC)
+
+> Durante el POC no se escriben tests (§0.1). Lo que sigue describe cómo se van a probar las cosas cuando la v1 funcione; mientras tanto, el código se diseña para que sea posible (fuentes de frames inyectables, núcleo sin Qt) y se verifica a mano.
 
 La regla de `CLAUDE.md` es que toda la visión y el BoardModel se prueben **sin cámara**. Para eso hacen falta imágenes de algún lado. Tres fuentes, de la más barata a la más fiel:
 
@@ -231,6 +234,8 @@ Las esquinas se completan después de grabar con `chessoptic calibrate --video <
 ---
 
 ## 3. Hito 0 — Corre y levanta la UI (Etapa 0 del PLAN)
+
+> **Modo POC** (§0.1): en las tablas de §3 a §6 la columna "Cómo se testea" es la referencia para cuando se agreguen tests. Durante el POC la verificación es `uv run chessoptic` y mirar. Se omiten: `pytest` y sus plugins, el job `smoke`, `core/registry.py`, `capture/registry.py`, `adapters/registry.py`, entry points y `settings_schema`; los proveedores del POC (seguimiento y Stockfish) se listan a mano en la UI.
 
 ### 3.1 Tareas en orden
 
