@@ -164,6 +164,8 @@ class MoveTestProgress:
     stage: MoveTestStage
     detail: str
     latency_ms: float | None = None
+    mismatched: tuple[int, ...] = ()  # squares that differ from what the stage expects
+    error: str = ""  # human-readable list of those squares, empty when nothing is wrong
 
 
 # ---------------------------------------------------------------- board events (tracker → session)

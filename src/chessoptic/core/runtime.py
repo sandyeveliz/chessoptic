@@ -8,6 +8,7 @@ from collections.abc import Callable
 
 from chessoptic.adapters import create_adapter
 from chessoptic.capture.webcam import CameraInfo, WebcamSource, list_cameras
+from chessoptic.core import debug
 from chessoptic.core.bus import EventBus
 from chessoptic.core.config import (
     AppConfig,
@@ -23,7 +24,11 @@ from chessoptic.core.events import (
     CameraStatus,
     ClassifierTrained,
     DriverState,
+    FrameEvent,
+    MoveTestProgress,
+    OccupancyFrame,
     Phase,
+    PositionMismatch,
     SetupCheckReport,
 )
 from chessoptic.core.health import HealthAggregator
@@ -49,8 +54,53 @@ class CoreRuntime:
         self.camera: CameraInfo | None = None
         self.profile: CameraProfile | None = None
         self.session: GameSession | None = None
+        self._last_frame: FrameEvent | None = None
+        self._last_occupancy: OccupancyFrame | None = None
         self.bus.subscribe(DriverState, self._on_driver_state)
+        self.bus.subscribe(FrameEvent, self._remember_frame)
+        self.bus.subscribe(OccupancyFrame, self._remember_occupancy)
+        self.bus.subscribe(MoveTestProgress, self._on_move_test_progress)
+        self.bus.subscribe(PositionMismatch, self._on_position_mismatch)
         self.pipeline.start()
+
+    # ---- diagnostics -------------------------------------------------------
+
+    def _remember_frame(self, event: FrameEvent) -> None:
+        self._last_frame = event
+
+    def _remember_occupancy(self, event: OccupancyFrame) -> None:
+        self._last_occupancy = event
+
+    def _on_move_test_progress(self, event: MoveTestProgress) -> None:
+        if event.mismatched:
+            self._dump(
+                "movetest", {"stage": str(event.stage), "mismatched": list(event.mismatched)}
+            )
+
+    def _on_position_mismatch(self, event: PositionMismatch) -> None:
+        issues = [
+            {"square": i.square, "expected": i.expected, "seen": i.seen} for i in event.issues
+        ]
+        self._dump("mismatch", {"issues": issues})
+
+    def _dump(self, tag: str, info: dict[str, object]) -> None:
+        if not self.config.save_error_frames:
+            return
+        frame, occ = self._last_frame, self._last_occupancy
+        calibration = self.pipeline.calibration
+        details: dict[str, object] = {
+            **info,
+            "a1": calibration.a1_corner if calibration is not None else None,
+            "grid": list(occ.grid) if occ is not None else None,
+            "confidence": [round(c, 3) for c in occ.confidence] if occ is not None else None,
+            "camera": self.camera.key if self.camera is not None else None,
+        }
+        debug.dump(
+            tag,
+            frame.raw if frame is not None else None,
+            frame.rectified if frame is not None else None,
+            details,
+        )
 
     # ---- cameras ---------------------------------------------------------
 

@@ -21,6 +21,14 @@ from chessoptic.vision.pipeline import VisionPipeline
 log = logging.getLogger(__name__)
 
 
+def _seen(value: int) -> str:
+    return {
+        int(Occupancy.EMPTY): "vacía",
+        int(Occupancy.WHITE): "pieza blanca",
+        int(Occupancy.BLACK): "pieza negra",
+    }[value]
+
+
 def _after_e2e4() -> Grid:
     board = chess.Board()
     board.push_uci("e2e4")
@@ -63,6 +71,7 @@ class SetupFlow:
         self._watch_initial = False
         self._move_stage: MoveTestStage | None = None
         self._last_moving_ts: float | None = None
+        self._move_mismatch: tuple[int, ...] | None = None
         bus.subscribe(StabilityEvent, self._on_stability)
         bus.subscribe(OccupancyFrame, self._on_occupancy)
 
@@ -80,7 +89,10 @@ class SetupFlow:
 
     def start_move_test(self) -> None:
         self._move_stage = MoveTestStage.WAITING_MOVE
-        self._bus.publish(MoveTestProgress(self._move_stage, "Mové el peón de e2 a e4 y soltá."))
+        self._move_mismatch = None
+        self._bus.publish(
+            MoveTestProgress(self._move_stage, "Mové el peón de e2 a e4, soltalo y sacá la mano.")
+        )
 
     def stop_move_test(self) -> None:
         self._move_stage = None
@@ -121,3 +133,31 @@ class SetupFlow:
             self._bus.publish(
                 MoveTestProgress(self._move_stage, "Vuelta a e2 detectada. Todo listo.", latency)
             )
+        elif self._move_stage in (MoveTestStage.WAITING_MOVE, MoveTestStage.WAITING_BACK):
+            self._report_move_mismatch(event.grid)
+
+    def _report_move_mismatch(self, grid: Grid) -> None:
+        """Tell the user which squares keep the test from passing (only when the set changes)."""
+        expected = EXPECTED_E2E4 if self._move_stage == MoveTestStage.WAITING_MOVE else STARTPOS
+        wrong = tuple(sq for sq in chess.SQUARES if grid[sq] != expected[sq])
+        if wrong == self._move_mismatch:
+            return
+        self._move_mismatch = wrong
+        assert self._move_stage is not None
+        waiting_move = self._move_stage == MoveTestStage.WAITING_MOVE
+        detail = (
+            "Mové el peón de e2 a e4, soltalo y sacá la mano."
+            if waiting_move
+            else "e2–e4 detectada. Ahora volvé el peón a e2 y sacá la mano."
+        )
+        # The board still in the previous state of this stage is not an error, just waiting.
+        if grid == (STARTPOS if waiting_move else EXPECTED_E2E4):
+            self._bus.publish(MoveTestProgress(self._move_stage, detail))
+            return
+        parts = [
+            f"{chess.square_name(sq)}: veo {_seen(grid[sq])}, debería {_seen(expected[sq])}"
+            for sq in wrong[:4]
+        ]
+        more = f" y {len(wrong) - 4} más" if len(wrong) > 4 else ""
+        error = "No coincide · " + "; ".join(parts) + more + "."
+        self._bus.publish(MoveTestProgress(self._move_stage, detail, mismatched=wrong, error=error))

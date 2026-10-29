@@ -528,6 +528,11 @@ class WizardView(QWidget):
         self._move_latency = _muted("", page)
         self._move_latency.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self._move_latency)
+        self._move_error = QLabel("", page)
+        self._move_error.setObjectName("error")
+        self._move_error.setWordWrap(True)
+        self._move_error.hide()
+        layout.addWidget(self._move_error)
         self._move_view = CameraView("rectified", page)
         layout.addWidget(self._move_view)
         row = QHBoxLayout()
@@ -548,19 +553,30 @@ class WizardView(QWidget):
         self._move_view.set_a1(self._a1)
         self._move_view.set_highlights({chess.E2: "origin", chess.E4: "destination"})
         self._move_hint.setText("Mové el peón de e2 a e4, soltalo y sacá la mano.")
+        self._move_big.setText("e2–e4")
         self._move_latency.setText("")
+        self._move_error.hide()
         self._move_next.setEnabled(False)
         self._runtime.start_move_test()
 
     def _on_move_test(self, progress: MoveTestProgress) -> None:
         self._move_hint.setText(progress.detail)
+        self._move_error.setText(progress.error)
+        self._move_error.setVisible(bool(progress.error))
         if progress.latency_ms is not None:
             self._move_latency.setText(f"detectada {progress.latency_ms:.0f} ms después de soltar")
         if progress.stage == MoveTestStage.WAITING_BACK:
-            self._move_view.set_highlights({chess.E4: "origin", chess.E2: "destination"})
+            self._move_big.setText("e4–e2")
+            highlights = {chess.E4: "origin", chess.E2: "destination"}
         elif progress.stage == MoveTestStage.DONE:
-            self._move_view.set_highlights({})
+            self._move_big.setText("✓ e2–e4 y vuelta")
+            highlights = {}
             self._move_next.setEnabled(True)
+        else:
+            highlights = {chess.E2: "origin", chess.E4: "destination"}
+        for sq in progress.mismatched:
+            highlights[sq] = "error"
+        self._move_view.set_highlights(highlights)
 
     # ---- step 6: provider ---------------------------------------------------------
 
