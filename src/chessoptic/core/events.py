@@ -111,6 +111,12 @@ class OccupancyFrame:
     stable: bool
     motion: float
     ts: float
+    # Squares whose *image* changed since the last accepted position (empty = unknown).
+    changed: tuple[bool, ...] = ()
+
+    @property
+    def changed_squares(self) -> set[int]:
+        return {sq for sq, flag in enumerate(self.changed) if flag}
 
     @property
     def mean_confidence(self) -> float:

@@ -78,6 +78,7 @@ class GameSession:
         mode: GameMode,
         mismatch_grace_ms: int = 2000,
         promotion_default: str = "ask",
+        on_accept: Callable[[], None] | None = None,
     ) -> None:
         self._bus = bus
         self._adapter = adapter
@@ -85,7 +86,7 @@ class GameSession:
         self._promotion_default = promotion_default
         self._lock = threading.RLock()
         self._model = BoardModel(both_sides=adapter.info.both_sides)
-        self._tracker = BoardTracker(self._model, mismatch_grace_ms)
+        self._tracker = BoardTracker(self._model, mismatch_grace_ms, on_accept=on_accept)
         self._state = DriverStateName.VERIFYING_BOARD
         self._state_before_issue: DriverStateName = DriverStateName.MY_TURN
         self._my_color: bool | None = None
@@ -151,6 +152,7 @@ class GameSession:
             self._promotion_candidates = ()
             fen_before = self._model.fen
             san = self._model.push(chosen)
+            self._tracker.notify_accept()
             self._handle_my_move(MoveDetected(chosen, san, fen_before, self._model.fen))
 
     def export_pgn(self) -> Path | None:
@@ -342,7 +344,7 @@ class GameSession:
                 self._log("error", f"jugada rechazada: {event.reason}")
                 self._bus.publish(AdapterError(f"Jugada rechazada: {event.reason}"))
                 # The model already has the move; undo it so the board can be corrected.
-                self._model.board.pop()
+                self._model.pop()
                 self._state_before_issue = DriverStateName.MY_TURN
                 self._set_state(DriverStateName.MISMATCH, "Deshacé la jugada en el tablero.")
             elif isinstance(event, OpponentMove):

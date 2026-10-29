@@ -20,6 +20,7 @@ from chessoptic.vision.features import FEATURE_COUNT, Features
 
 CLASSES = (int(Occupancy.EMPTY), int(Occupancy.WHITE), int(Occupancy.BLACK))
 BASELINE_TERMS = 3  # 1, file, rank
+CHANGE_THRESHOLD = 0.8  # scaled feature distance; class centroids sit ≥ 1–2 apart
 PARITIES = (0, 1)  # 0 = light square, 1 = dark square
 
 
@@ -120,6 +121,15 @@ class OccupancyClassifier:
             margin = (second[1] - best[1]) / (second[1] + best[1] + 1e-9)
             confidence.append(float(min(1.0, max(0.0, margin * 2.0))))
         return tuple(grid), tuple(confidence)
+
+    # ---- change detection ----------------------------------------------
+
+    def change_flags(
+        self, features: Features, reference: Features, threshold: float = CHANGE_THRESHOLD
+    ) -> tuple[bool, ...]:
+        """Per square: did the image change materially since `reference` (scaled distance)?"""
+        dist = np.linalg.norm((features - reference) / self.scale, axis=1)
+        return tuple(bool(d > threshold) for d in dist)
 
     # ---- diagnostics ---------------------------------------------------
 

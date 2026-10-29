@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import chess
 
-from chessoptic.board.model import Ambiguous, BoardModel, Mismatch, Move, NoChange, Transient
+from chessoptic.board.model import (
+    Ambiguous,
+    BoardModel,
+    Mismatch,
+    Move,
+    NoChange,
+    Transient,
+    changed_squares,
+    wrong_squares,
+)
 from chessoptic.board.occupancy import Grid, diff
 from chessoptic.core.events import (
     MoveAmbiguous,
@@ -14,6 +24,7 @@ from chessoptic.core.events import (
     OccupancyFrame,
     PositionMatched,
     PositionMismatch,
+    SquareIssue,
 )
 
 TrackerEvent = MoveDetected | MoveAmbiguous | PositionMismatch | PositionMatched
@@ -28,12 +39,21 @@ class _Target:
 
 
 class BoardTracker:
-    def __init__(self, model: BoardModel, mismatch_grace_ms: int = 2000) -> None:
+    def __init__(
+        self,
+        model: BoardModel,
+        mismatch_grace_ms: int = 2000,
+        confirm_frames: int = 2,
+        on_accept: Callable[[], None] | None = None,
+    ) -> None:
         self.model = model
         self.mismatch_grace_ms = mismatch_grace_ms
+        self.confirm_frames = confirm_frames
+        self.on_accept = on_accept
         self._target: _Target | None = None
         self._mismatch_since: float | None = None
         self._in_mismatch = False
+        self._candidate: tuple[chess.Move, int] | None = None  # (move, stable frames seen)
 
     # ---- control ---------------------------------------------------------
 
@@ -62,15 +82,24 @@ class BoardTracker:
             return self._verify(frame)
         return self._detect(frame)
 
+    def notify_accept(self) -> None:
+        if self.on_accept is not None:
+            self.on_accept()
+
     def _detect(self, frame: OccupancyFrame) -> list[TrackerEvent]:
-        resolution = self.model.resolve(frame.grid)
+        resolution = self.model.resolve(frame.grid, frame.changed_squares)
         if isinstance(resolution, NoChange):
+            self._candidate = None
             return self._clear_mismatch(frame)
         if isinstance(resolution, Move):
             self.reset_mismatch()
+            if not self._confirmed(resolution.move):
+                return []
             fen_before = self.model.fen
-            san = self.model.push(resolution.move)
+            san = self.model.push(resolution.move, observed=frame.grid)
+            self.notify_accept()
             return [MoveDetected(resolution.move, san, fen_before, self.model.fen)]
+        self._candidate = None
         if isinstance(resolution, Ambiguous):
             self.reset_mismatch()
             return [MoveAmbiguous(resolution.candidates)]
@@ -79,20 +108,36 @@ class BoardTracker:
         assert isinstance(resolution, Mismatch)
         return self._maybe_mismatch(frame, PositionMismatch(resolution.issues))
 
+    def _confirmed(self, move: chess.Move) -> bool:
+        """A move must be seen on `confirm_frames` consecutive stable frames."""
+        if self._candidate is not None and self._candidate[0] == move:
+            self._candidate = (move, self._candidate[1] + 1)
+        else:
+            self._candidate = (move, 1)
+        if self._candidate[1] >= self.confirm_frames:
+            self._candidate = None
+            return True
+        return False
+
     def _verify(self, frame: OccupancyFrame) -> list[TrackerEvent]:
         assert self._target is not None
         target = self._target
-        if frame.grid == target.grid:
+        current = self.model.expected_occupancy()
+        reference = self.model.reference_grid()
+        expected_changes = set(diff(current, target.grid))
+        wrong = wrong_squares(frame.grid, reference, current, target.grid, frame.changed_squares)
+        if not wrong:
+            if not self._confirmed(target.move):
+                return []
             self._target = None
             self.reset_mismatch()
-            self.model.push(target.move)
+            self.model.push(target.move, observed=frame.grid)
+            self.notify_accept()
             return [PositionMatched(self.model.fen)]
-        current = self.model.expected_occupancy()
-        changed = set(diff(current, frame.grid))
-        expected_changes = set(diff(current, target.grid))
+        changed = changed_squares(frame.grid, reference, current, frame.changed_squares)
         if not changed or changed <= expected_changes:
             return self._clear_mismatch(frame)  # untouched or in progress
-        issues = self.model.issues_against(frame.grid, target.grid)
+        issues = tuple(SquareIssue(sq, target.grid[sq], frame.grid[sq]) for sq in wrong)
         return self._maybe_mismatch(frame, PositionMismatch(issues))
 
     def _maybe_mismatch(self, frame: OccupancyFrame, event: PositionMismatch) -> list[TrackerEvent]:

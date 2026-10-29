@@ -219,6 +219,7 @@ class CoreRuntime:
             get_mode("free"),
             mismatch_grace_ms=2000,
             promotion_default=self.config.promotion_default,
+            on_accept=self.pipeline.mark_reference,
         )
         self.session.start()
         return self.session

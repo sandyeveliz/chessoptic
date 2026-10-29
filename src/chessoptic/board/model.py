@@ -1,9 +1,16 @@
 """BoardModel: full position (piece types included) maintained from occupancy changes.
 
-The camera only tells us empty / white / black per square. Given the current position, the
-legal moves are enumerated and the one whose resulting occupancy matches the observed grid is
-the move that was played. Castling, en passant and captures fall out of this comparison for
-free; promotion is the only ambiguous case (same squares, four possible pieces).
+The camera only tells us empty / white / black per square, and it is not perfect: a square a
+piece just left may read as "black" because of a neighbour's shadow. So a move is recognised by
+its **change set** against the last grid we accepted as showing the current position (the
+*reference*), not by an exact comparison with the ideal occupancy:
+
+- every square outside the move must look like it did in the reference;
+- every square the move leaves empty must have changed (the camera sees *something* else);
+- every square the move occupies must show the right colour.
+
+Castling, en passant and captures fall out of this for free; promotion is the only ambiguous
+case (same squares, four possible pieces).
 """
 
 from __future__ import annotations
@@ -12,7 +19,7 @@ from dataclasses import dataclass
 
 import chess
 
-from chessoptic.board.occupancy import Grid, diff, from_board
+from chessoptic.board.occupancy import Grid, Occupancy, diff, from_board
 from chessoptic.core.events import SquareIssue
 
 
@@ -46,10 +53,66 @@ class Mismatch:
 Resolution = NoChange | Move | Ambiguous | Transient | Mismatch
 
 
+def wrong_squares(
+    grid: Grid,
+    reference: Grid,
+    current: Grid,
+    target: Grid,
+    moved: set[int] | None = None,
+) -> tuple[int, ...]:
+    """Squares that keep `grid` from showing `target`, reached from `current` (module docstring).
+
+    `moved` are squares whose *image* changed since the reference (from the vision layer).
+    Squares the transition occupies must show the right colour and have changed (a persistent
+    shadow is not an arriving piece). Squares it vacates must have changed (a black piece's
+    shadow still reads black, but the image did change). Untouched empty squares may look as
+    before or truly empty.
+    """
+    moved = moved or set()
+    wrong = []
+    for sq in chess.SQUARES:
+        in_move = current[sq] != target[sq]
+        changed = grid[sq] != reference[sq] or sq in moved
+        if target[sq] != Occupancy.EMPTY:
+            ok = grid[sq] == target[sq] and (changed or not in_move)
+        elif in_move:
+            ok = changed and grid[sq] != Occupancy.WHITE  # vacated: empty or a dark shadow
+        else:
+            # Untouched empty square: as before, truly empty, or a dark phantom (a shadow reads
+            # "black"); only a bright reading is a real foreign piece.
+            ok = grid[sq] != Occupancy.WHITE or reference[sq] == Occupancy.WHITE
+        if not ok:
+            wrong.append(sq)
+    return tuple(wrong)
+
+
+def changed_squares(
+    grid: Grid, reference: Grid, current: Grid, moved: set[int] | None = None
+) -> set[int]:
+    """Squares that look neither like the reference nor like the ideal current position (by
+    label, or by image change on a square that disagrees with the position). Dark phantoms on
+    empty squares (shadows) are not counted."""
+    moved = moved or set()
+    out = set()
+    for sq in chess.SQUARES:
+        if grid[sq] == current[sq]:
+            continue
+        if grid[sq] == reference[sq] and sq not in moved:
+            continue
+        out.add(sq)
+    return out
+
+
+def is_phantom(sq: int, grid: Grid, current: Grid) -> bool:
+    """A dark reading on a square that should be empty: most likely a shadow."""
+    return current[sq] == Occupancy.EMPTY and grid[sq] == Occupancy.BLACK
+
+
 class BoardModel:
     def __init__(self, board: chess.Board | None = None, both_sides: bool = False) -> None:
         self.board = board if board is not None else chess.Board()
         self.both_sides = both_sides
+        self.reference: Grid | None = None  # last observed grid accepted for `board`
 
     # ---- queries ---------------------------------------------------------
 
@@ -78,30 +141,49 @@ class BoardModel:
         board.push(move)
         return from_board(board)
 
-    def resolve(self, grid: Grid) -> Resolution:
+    def reference_grid(self) -> Grid:
+        return self.reference if self.reference is not None else self.expected_occupancy()
+
+    def accept(self, grid: Grid) -> None:
+        """Remember how the camera sees the current position."""
+        self.reference = grid
+
+    def resolve(self, grid: Grid, moved: set[int] | None = None) -> Resolution:
         current = self.expected_occupancy()
-        changed = set(diff(current, grid))
+        if grid == current:
+            self.reference = grid
+            return NoChange()
+        reference = self.reference_grid()
+        changed = changed_squares(grid, reference, current, moved)
         if not changed:
+            self.reference = grid
             return NoChange()
 
-        exact: list[chess.Move] = []
+        hard = {sq for sq in changed if not is_phantom(sq, grid, current)}
+        exact: list[tuple[int, chess.Move]] = []  # (changed squares explained, move)
         partial: list[chess.Move] = []
         for move in self.candidate_moves():
             after = self.occupancy_after(move)
             move_changes = set(diff(current, after))
-            if after == grid:
-                exact.append(move)
-            elif changed <= move_changes:
+            if not wrong_squares(grid, reference, current, after, moved):
+                exact.append((len(changed & move_changes), move))
+            elif hard <= move_changes:
                 partial.append(move)
 
-        if len(exact) == 1:
-            return Move(exact[0])
-        if len(exact) > 1:
-            # Same from/to squares: only promotions differ.
-            return Ambiguous(tuple(exact))
+        if exact:
+            # Prefer the move that explains the most changed squares (O-O over Rg8 when both
+            # fit because a shadow is tolerated on the rook's square).
+            best = max(score for score, _ in exact)
+            top = [move for score, move in exact if score == best]
+            if len({(m.from_square, m.to_square) for m in top}) == 1:
+                return Move(top[0]) if len(top) == 1 else Ambiguous(tuple(top))
+            partial = top + partial
         if partial:
             return Transient(tuple(partial))
-        issues = tuple(SquareIssue(sq, current[sq], grid[sq]) for sq in sorted(changed))
+        if not hard:
+            self.reference = grid  # only shadows appeared: remember them, nothing happened
+            return NoChange()
+        issues = tuple(SquareIssue(sq, current[sq], grid[sq]) for sq in sorted(hard))
         return Mismatch(issues)
 
     def issues_against(self, grid: Grid, target: Grid) -> tuple[SquareIssue, ...]:
@@ -117,17 +199,28 @@ class BoardModel:
             board.ep_square = None
         return board.san(move)
 
-    def push(self, move: chess.Move) -> str:
-        """Apply the move (swapping the turn first if it belongs to the other side)."""
+    def push(self, move: chess.Move, observed: Grid | None = None) -> str:
+        """Apply the move (swapping the turn first if it belongs to the other side).
+
+        `observed` is the grid that showed the move; it becomes the new reference.
+        """
         if not self.board.is_legal(move):
             self.board.turn = not self.board.turn
             self.board.ep_square = None
         san = self.board.san(move)
         self.board.push(move)
+        self.reference = observed
         return san
+
+    def pop(self) -> chess.Move:
+        """Take back the last move; the camera reference is unknown again."""
+        self.reference = None
+        return self.board.pop()
 
     def set_fen(self, fen: str) -> None:
         self.board = chess.Board(fen)
+        self.reference = None
 
     def reset(self) -> None:
         self.board = chess.Board()
+        self.reference = None

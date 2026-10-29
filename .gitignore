@@ -20,3 +20,7 @@ tests/fixtures/**/*.mp4
 tests/fixtures/**/*.mov
 tests/fixtures/**/*.jpg
 tests/fixtures/**/*.png
+
+# Local agent skills (installed per machine)
+.agents/
+.claude/skills/
