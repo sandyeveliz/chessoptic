@@ -9,15 +9,14 @@ ChessOptic no exige una cámara ni un tablero concretos: el asistente de primer 
 - Luz pareja. Evitá: ventana de fondo (contraluz), una lámpara puntual que tire sombras largas, luz que cambie durante la partida.
 - Si tu cámara permite **fijar enfoque y exposición**, hacelo (pestaña Cámara, o el software del fabricante). El autoenfoque y la autoexposición "respirando" son la causa más común de falsos positivos.
 
-## Los 7 pasos del asistente
+## Los 6 pasos del asistente
 
 1. **Cámara**: elegí la cámara. Si ya tiene una calibración guardada, podés reutilizarla.
-2. **Encuadre**: acomodá la cámara hasta que el tablero quede dentro de la guía.
-3. **Esquinas**: arrastrá las cuatro manijas a las esquinas exteriores de la zona de juego y decí dónde está a1. La vista rectificada de abajo tiene que mostrar un tablero derecho.
-4. **Posición inicial**: armá las 32 piezas y sacá la mano. ChessOptic aprende cómo se ven *tus* piezas y *tus* casillas con esa posición (no hace falta ningún modelo descargado).
-5. **Chequeo de detección**: compará el overlay con tu tablero y respondé si coincide. Abajo aparece el reporte (ver siguiente sección).
-6. **Prueba de jugada**: mové e2–e4, soltá y volvé el peón. Si no lo detecta en unos segundos, probá "Reintentar" o revisá luz y estabilidad.
-7. **Proveedor**: con quién jugás. En el POC: "Solo seguimiento".
+2. **Encuadre**: arrastrá las cuatro manijas a las esquinas exteriores de la zona de juego y decí en qué esquina de la imagen está a1 (la casilla oscura a la izquierda de quien juega con blancas). La vista rectificada de abajo tiene que mostrar un tablero derecho con las blancas en las filas 1 y 2. Qué color jugás vos se elige recién en el último paso.
+3. **Posición inicial**: armá las 32 piezas y sacá la mano. ChessOptic aprende cómo se ven *tus* piezas y *tus* casillas con esa posición (no hace falta ningún modelo descargado).
+4. **Chequeo de detección**: compará el overlay con tu tablero y respondé si coincide. Abajo aparece el reporte (ver siguiente sección).
+5. **Prueba de jugada**: mové e2–e4, soltá y volvé el peón. Si no lo detecta en unos segundos, probá "Reintentar" o revisá luz y estabilidad.
+6. **Proveedor**: con quién jugás. En el POC: "Solo seguimiento".
 
 ## Qué significa cada hallazgo del chequeo
 

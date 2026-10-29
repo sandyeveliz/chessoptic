@@ -77,7 +77,7 @@ Estado no dibujado: **Moviendo** (mano sobre el tablero): bloque azul con indica
 | Conectado sin partida | `Conectado.dc.html` | Driver OK | "Listo para jugar", instrucción de abrir/iniciar partida, desde cuándo está conectado; cámara con posición inicial |
 | Fin de partida | `FinPartida.dc.html` | Driver OK | Resultado (ej. `1–0 · ganaste por abandono`), resumen, **Exportar PGN** / **Ver log**; "Reordená el tablero" con progreso x/32 y casillas fuera de lugar marcadas |
 
-Pasos del asistente de primer uso (**7**, implementados en `ui/views/wizard.py`): cámara → encuadre → 4 esquinas + a1 (4 posiciones posibles) → posición inicial (autoentrena) → **chequeo de detección** ("¿Coincide con tu tablero?" + hallazgos con acción) → **prueba de jugada** (e2–e4 y vuelta) → proveedor. Las pantallas Encuadre, Chequeo de detección y Prueba de jugada no tienen mockup todavía; siguen la estructura de `Calibrar` y `VerificarTablero`.
+Pasos del asistente de primer uso (**6**, implementados en `ui/views/wizard.py`): cámara → encuadre con 4 esquinas arrastrables + a1 (4 posiciones posibles, independiente del color que juega el usuario) → posición inicial (autoentrena) → **chequeo de detección** ("¿Coincide con tu tablero?" + hallazgos con acción) → **prueba de jugada** (e2–e4 y vuelta) → proveedor. Las pantallas Chequeo de detección y Prueba de jugada no tienen mockup todavía; siguen la estructura de `Calibrar` y `VerificarTablero`.
 
 ### Otras vistas
 

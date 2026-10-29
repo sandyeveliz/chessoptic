@@ -1,4 +1,4 @@
-"""First-run wizard: camera, framing, corners, initial position, check, move test, provider."""
+"""First-run wizard: camera, framing+corners, initial position, check, move test, provider."""
 
 from __future__ import annotations
 
@@ -47,7 +47,6 @@ from chessoptic.vision.calibration import (
 STEP_TITLES = (
     "Cámara",
     "Encuadre",
-    "Esquinas",
     "Posición inicial",
     "Chequeo de detección",
     "Prueba de jugada",
@@ -130,7 +129,6 @@ class WizardView(QWidget):
         root.addWidget(self._stack, 1)
         for builder in (
             self._build_camera_step,
-            self._build_framing_step,
             self._build_corners_step,
             self._build_initial_step,
             self._build_check_step,
@@ -163,18 +161,18 @@ class WizardView(QWidget):
 
     def go_to(self, index: int) -> None:
         previous = self._stack.currentIndex()
-        if previous == 5:
+        if previous == 4:
             self._runtime.stop_move_test()
         self._stack.setCurrentIndex(index)
         self._stepper.set_current(index)
         self._step_label.setText(f"Paso {index + 1} de {len(STEP_TITLES)} · {STEP_TITLES[index]}")
-        if index == 2:
+        if index == 1:
             self._enter_corners()
-        elif index == 3:
+        elif index == 2:
             self._enter_initial()
-        elif index == 4:
+        elif index == 3:
             self._enter_check()
-        elif index == 5:
+        elif index == 4:
             self._enter_move_test()
 
     # ---- step 1: camera -----------------------------------------------------
@@ -197,7 +195,7 @@ class WizardView(QWidget):
         self._camera_hint = _muted("", page)
         layout.addWidget(self._camera_hint)
         self._use_saved = _button("Usar la calibración guardada", page)
-        self._use_saved.clicked.connect(lambda: self.go_to(3))
+        self._use_saved.clicked.connect(lambda: self.go_to(2))
         self._use_saved.hide()
         layout.addWidget(self._use_saved)
         self._use_camera = _button("Usar esta cámara y calibrar", page, primary=True)
@@ -255,48 +253,22 @@ class WizardView(QWidget):
             "Hay una calibración guardada para esta cámara." if has_profile else "Cámara lista."
         )
 
-    # ---- step 2: framing ----------------------------------------------------
-
-    def _build_framing_step(self, page: QWidget) -> None:
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(10)
-        layout.addWidget(_title("Encuadrá el tablero", page))
-        self._framing_view = CameraView("raw", page)
-        self._framing_view.set_guide(True)
-        layout.addWidget(self._framing_view)
-        tips = QFrame(page)
-        tips.setObjectName("card")
-        tips_layout = QVBoxLayout(tips)
-        for text in (
-            "• El tablero entero dentro de la guía, ocupando la mayor parte de la imagen.",
-            "• Cámara fija: si se mueve después, hay que recalibrar.",
-            "• Luz pareja, sin ventana de fondo ni sombras largas.",
-            "• Desde arriba es lo más fácil; en diagonal funciona si no es muy baja.",
-        ):
-            tips_layout.addWidget(_muted(text, tips))
-        layout.addWidget(tips)
-        row = QHBoxLayout()
-        back = _button("Atrás", page)
-        back.clicked.connect(lambda: self.go_to(0))
-        nxt = _button("Continuar", page, primary=True)
-        nxt.clicked.connect(lambda: self.go_to(2))
-        row.addWidget(back)
-        row.addWidget(nxt, 1)
-        layout.addLayout(row)
-        layout.addStretch(1)
-
-    # ---- step 3: corners ----------------------------------------------------
+    # ---- step 2: framing + corners ---------------------------------------------
 
     def _build_corners_step(self, page: QWidget) -> None:
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(10)
-        layout.addWidget(_title("Marcá las 4 esquinas", page))
+        layout.addWidget(_title("Encuadrá el tablero", page))
         layout.addWidget(
-            _muted("Arrastrá las manijas a las esquinas exteriores de la zona de juego.", page)
+            _muted(
+                "Arrastrá las cuatro manijas a las esquinas exteriores de la zona de juego. "
+                "El tablero tiene que ocupar la mayor parte de la imagen.",
+                page,
+            )
         )
         self._corner_view = CameraView("raw", page)
+        self._corner_view.setMinimumHeight(260)
         self._corner_view.set_editable(True)
         self._corner_view.corners_changed.connect(self._on_corners_dragged)
         self._corner_view.corner_drag_finished.connect(self._on_corners_dropped)
@@ -306,6 +278,15 @@ class WizardView(QWidget):
         self._corner_preview.setMaximumHeight(200)
         layout.addWidget(self._corner_preview)
         layout.addWidget(_section("¿Dónde está la casilla a1?", page))
+        layout.addWidget(
+            _muted(
+                "a1 es la esquina oscura a la izquierda de quien juega con blancas, "
+                "mirado desde la imagen de la cámara. No importa qué color jugás vos: "
+                "eso se elige al final. Comprobá en la vista rectificada que las piezas "
+                "blancas queden en las filas 1 y 2.",
+                page,
+            )
+        )
         self._a1_group = QButtonGroup(page)
         for key in A1_CORNERS:
             radio = QRadioButton(A1_LABELS[key], page)
@@ -314,11 +295,21 @@ class WizardView(QWidget):
             self._a1_group.addButton(radio)
             layout.addWidget(radio)
         self._a1_group.buttonClicked.connect(self._on_a1_changed)
+        tips = QFrame(page)
+        tips.setObjectName("card")
+        tips_layout = QVBoxLayout(tips)
+        for text in (
+            "• Cámara fija: si se mueve después, hay que recalibrar.",
+            "• Luz pareja, sin ventana de fondo ni sombras largas.",
+            "• Desde arriba es lo más fácil; en diagonal funciona si no es muy baja.",
+        ):
+            tips_layout.addWidget(_muted(text, tips))
+        layout.addWidget(tips)
         row = QHBoxLayout()
         back = _button("Atrás", page)
-        back.clicked.connect(lambda: self.go_to(1))
+        back.clicked.connect(lambda: self.go_to(0))
         confirm = _button("Confirmar esquinas", page, primary=True)
-        confirm.clicked.connect(lambda: self.go_to(3))
+        confirm.clicked.connect(lambda: self.go_to(2))
         row.addWidget(back)
         row.addWidget(confirm, 1)
         layout.addLayout(row)
@@ -357,7 +348,7 @@ class WizardView(QWidget):
         size = (self._frames.raw.width(), self._frames.raw.height())
         self._runtime.set_calibration(Calibration(self._corners, self._a1, size))
 
-    # ---- step 4: initial position --------------------------------------------
+    # ---- step 3: initial position --------------------------------------------
 
     def _build_initial_step(self, page: QWidget) -> None:
         layout = QVBoxLayout(page)
@@ -377,12 +368,12 @@ class WizardView(QWidget):
         layout.addWidget(self._initial_view)
         row = QHBoxLayout()
         back = _button("Esquinas", page)
-        back.clicked.connect(lambda: self.go_to(2))
+        back.clicked.connect(lambda: self.go_to(1))
         retrain = _button("Volver a aprender", page)
         retrain.clicked.connect(self._enter_initial)
         self._initial_next = _button("Continuar", page, primary=True)
         self._initial_next.setEnabled(False)
-        self._initial_next.clicked.connect(lambda: self.go_to(4))
+        self._initial_next.clicked.connect(lambda: self.go_to(3))
         row.addWidget(back)
         row.addWidget(retrain)
         row.addWidget(self._initial_next, 1)
@@ -402,7 +393,7 @@ class WizardView(QWidget):
         self._runtime.arm_initial_training()
 
     def _on_trained(self, event: ClassifierTrained) -> None:
-        if event.trained and self._stack.currentIndex() == 3:
+        if event.trained and self._stack.currentIndex() == 2:
             self._initial_hint.setText("Listo. Revisá que las 32 piezas se vean en su lugar.")
 
     def _on_initial_check(self, check: InitialPositionCheck) -> None:
@@ -412,7 +403,7 @@ class WizardView(QWidget):
         highlights.update({sq: "error" for sq in check.extra + check.wrong_color})
         self._initial_view.set_highlights(highlights)
         self._initial_next.setEnabled(check.complete)
-        if self._stack.currentIndex() != 3:
+        if self._stack.currentIndex() != 2:
             return
         if check.complete:
             self._initial_hint.setText("Posición inicial completa: 32 / 32.")
@@ -428,7 +419,7 @@ class WizardView(QWidget):
                 )
             self._initial_hint.setText("Casillas marcadas: " + "; ".join(parts) + ".")
 
-    # ---- step 5: detection check -------------------------------------------------
+    # ---- step 4: detection check -------------------------------------------------
 
     def _build_check_step(self, page: QWidget) -> None:
         layout = QVBoxLayout(page)
@@ -461,9 +452,9 @@ class WizardView(QWidget):
         retry = _button("Reintentar", page)
         retry.clicked.connect(self._enter_check)
         corners = _button("Esquinas", page)
-        corners.clicked.connect(lambda: self.go_to(2))
+        corners.clicked.connect(lambda: self.go_to(1))
         self._check_next = _button("Continuar", page, primary=True)
-        self._check_next.clicked.connect(lambda: self.go_to(5))
+        self._check_next.clicked.connect(lambda: self.go_to(4))
         row.addWidget(retry)
         row.addWidget(corners)
         row.addWidget(self._check_next, 1)
@@ -518,7 +509,7 @@ class WizardView(QWidget):
             "Continuar" if report.level == CheckLevel.GOOD else "Continuar igual"
         )
 
-    # ---- step 6: move test -------------------------------------------------------
+    # ---- step 5: move test -------------------------------------------------------
 
     def _build_move_test_step(self, page: QWidget) -> None:
         layout = QVBoxLayout(page)
@@ -544,9 +535,9 @@ class WizardView(QWidget):
         retry.clicked.connect(self._enter_move_test)
         self._move_next = _button("Listo", page, primary=True)
         self._move_next.setEnabled(False)
-        self._move_next.clicked.connect(lambda: self.go_to(6))
+        self._move_next.clicked.connect(lambda: self.go_to(5))
         skip = _button("Saltar", page)
-        skip.clicked.connect(lambda: self.go_to(6))
+        skip.clicked.connect(lambda: self.go_to(5))
         row.addWidget(retry)
         row.addWidget(skip)
         row.addWidget(self._move_next, 1)
@@ -571,7 +562,7 @@ class WizardView(QWidget):
             self._move_view.set_highlights({})
             self._move_next.setEnabled(True)
 
-    # ---- step 7: provider ---------------------------------------------------------
+    # ---- step 6: provider ---------------------------------------------------------
 
     def _build_provider_step(self, page: QWidget) -> None:
         layout = QVBoxLayout(page)
@@ -619,7 +610,7 @@ class WizardView(QWidget):
         )
         row = QHBoxLayout()
         back = _button("Atrás", page)
-        back.clicked.connect(lambda: self.go_to(5))
+        back.clicked.connect(lambda: self.go_to(4))
         start = _button("Empezar", page, primary=True)
         start.clicked.connect(self._finish)
         row.addWidget(back)
@@ -644,7 +635,7 @@ class WizardView(QWidget):
 
     def _on_frames(self, frames: UiFrames) -> None:
         self._frames = frames
-        for view in (self._camera_preview, self._framing_view, self._corner_view):
+        for view in (self._camera_preview, self._corner_view):
             view.set_frames(frames.raw, frames.rectified)
         for view in (self._corner_preview, self._initial_view, self._check_view, self._move_view):
             view.set_frames(frames.raw, frames.rectified)

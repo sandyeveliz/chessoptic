@@ -275,6 +275,8 @@ Es la parte del producto que decide si ChessOptic funciona con **tu** cámara, *
 
 ### 4.1 El flujo (7 pasos; reemplaza a los 6 de UI.md §4, que se actualiza en este hito)
 
+> Implementado con **6 pasos**: los pasos 2 (encuadre) y 3 (esquinas) de esta tabla se fusionaron en uno solo con manijas arrastrables, a pedido del autor al probarlo con la cámara real. La elección de a1 es solo posicional; el color del usuario se elige en el paso de proveedor.
+
 | Paso | Pantalla | Qué hace el usuario | Qué hace ChessOptic | Mockup |
 |---|---|---|---|---|
 | 1 | Cámara | Elige una cámara de la lista (cualquiera: USB, integrada, celular que el SO vea como webcam) y ve la vista previa en vivo. **Usar esta cámara**. | Enumera dispositivos, abre el elegido, mide fps, carga el perfil guardado si existe (y ofrece saltar al paso 6). | `Inicio.dc.html` |
