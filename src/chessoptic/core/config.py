@@ -54,7 +54,8 @@ class AppConfig:
     save_error_frames: bool = True
     sound_on_errors: bool = False
     stockfish_path: str | None = None
-    stockfish_level: int = 4
+    stockfish_level: int = 4  # 1-8, see adapters/local/stockfish.py
+    my_color: str = "white"  # colour against a local engine
     promotion_default: str = "ask"
     window: WindowConfig = field(default_factory=WindowConfig)
 

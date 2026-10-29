@@ -44,6 +44,7 @@ from chessoptic.core.events import (
     PositionMismatch,
 )
 from chessoptic.game.modes import GameMode
+from chessoptic.game.outcome import result_and_reason
 from chessoptic.game.pgn import save_pgn
 
 log = logging.getLogger(__name__)
@@ -287,6 +288,7 @@ class GameSession:
                 )
                 self._set_state(DriverStateName.MY_TURN, "")
                 self._publish_info()
+                self._check_game_over()
 
     def _handle_my_move(self, event: MoveDetected) -> None:
         self._pending_my_move = (event.move, event.san)
@@ -334,6 +336,7 @@ class GameSession:
                 else:
                     self._set_state(DriverStateName.OPPONENT_TURN, "Esperando…")
                 self._publish_info()
+                self._check_game_over()
             elif isinstance(event, MoveRejected):
                 self._pending_my_move = None
                 self._log("error", f"jugada rechazada: {event.reason}")
@@ -360,6 +363,12 @@ class GameSession:
                 self._bus.publish(event)
 
     # ---- helpers -----------------------------------------------------------
+
+    def _check_game_over(self) -> None:
+        ended = result_and_reason(self._model.board)
+        if ended is None or self._state == DriverStateName.GAME_OVER:
+            return
+        self._on_adapter_event(GameOver(ended[0], ended[1]))
 
     def _reset_game(self) -> None:
         self._model.reset()

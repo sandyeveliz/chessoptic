@@ -274,9 +274,9 @@ Especificación detallada de pantallas, tokens y datos: [`docs/UI.md`](UI.md). M
 
 **Aceptación**: partida completa grabada reconstruida sin errores; en vivo ≤1 falsa detección cada 50 jugadas con luz normal.
 
-### Etapa 2 — Modo local
-- [ ] `LocalEngineAdapter` con Stockfish (nivel configurable).
-- [ ] Flujo completo de estados de partida en la UI (turno azul, reproducir jugada del rival, verificación, fin).
+### Etapa 2 — Modo local (hito H3)
+- [x] `StockfishAdapter` sobre `UciEngine` (cualquier motor UCI; nivel 1–8 y color en Ajustes).
+- [x] Flujo completo de estados de partida en la UI (turno azul, reproducir jugada del rival, verificación, fin). Sin reloj (modo `FreePlay`).
 
 **Aceptación**: jugar una partida completa contra Stockfish usando solo piezas físicas.
 

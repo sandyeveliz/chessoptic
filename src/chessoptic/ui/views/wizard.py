@@ -54,11 +54,11 @@ STEP_TITLES = (
     "Proveedor",
 )
 
-PROVIDERS: tuple[tuple[str, str, bool], ...] = (
-    ("tracking", "Solo seguimiento (anotar la partida)", True),
-    ("stockfish", "Stockfish local (hito H3)", False),
-    ("lichess", "Lichess (próximamente)", False),
-    ("chesscom", "chess.com vía Chessconnect (próximamente)", False),
+PROVIDERS: tuple[tuple[str, str], ...] = (
+    ("tracking", "Solo seguimiento (anotar la partida)"),
+    ("stockfish", "Stockfish local"),
+    ("lichess", "Lichess (próximamente)"),
+    ("chesscom", "chess.com vía Chessconnect (próximamente)"),
 )
 
 LEVEL_TEXT: dict[CheckLevel, tuple[str, str]] = {
@@ -579,8 +579,14 @@ class WizardView(QWidget):
         layout.setSpacing(10)
         layout.addWidget(_title("¿Con quién jugás?", page))
         layout.addWidget(_section("Proveedor", page))
+        from chessoptic.adapters.local.stockfish import find_stockfish
+
+        stockfish_found = find_stockfish(self._runtime.config) is not None
         self._provider_group = QButtonGroup(page)
-        for key, label, enabled in PROVIDERS:
+        for key, label in PROVIDERS:
+            enabled = key == "tracking" or (key == "stockfish" and stockfish_found)
+            if key == "stockfish" and not stockfish_found:
+                label += " (no encontrado: instalalo o indicá la ruta en Ajustes)"
             radio = QRadioButton(label, page)
             radio.setProperty("provider", key)
             radio.setEnabled(enabled)
@@ -589,10 +595,25 @@ class WizardView(QWidget):
             layout.addWidget(radio)
         if self._provider_group.checkedButton() is None:
             self._provider_group.buttons()[0].setChecked(True)
+        self._provider_group.buttonClicked.connect(self._on_provider_choice)
+        self._color_box = QWidget(page)
+        color_layout = QHBoxLayout(self._color_box)
+        color_layout.setContentsMargins(0, 0, 0, 0)
+        color_layout.addWidget(QLabel("Jugás con:", self._color_box))
+        self._color_group = QButtonGroup(self._color_box)
+        for key, label in (("white", "Blancas"), ("black", "Negras")):
+            radio = QRadioButton(label, self._color_box)
+            radio.setProperty("color", key)
+            radio.setChecked(key == self._runtime.config.my_color)
+            self._color_group.addButton(radio)
+            color_layout.addWidget(radio)
+        color_layout.addStretch(1)
+        layout.addWidget(self._color_box)
+        self._color_box.setVisible(self._runtime.config.provider == "stockfish")
         layout.addWidget(
             _muted(
                 "En 'Solo seguimiento' ChessOptic anota lo que pasa en el tablero "
-                "y lo exporta como PGN.",
+                "y lo exporta como PGN. Con Stockfish, el nivel se ajusta en Ajustes.",
                 page,
             )
         )
@@ -606,9 +627,15 @@ class WizardView(QWidget):
         layout.addLayout(row)
         layout.addStretch(1)
 
+    def _on_provider_choice(self, button: QRadioButton) -> None:
+        self._color_box.setVisible(str(button.property("provider")) == "stockfish")
+
     def _finish(self) -> None:
         button = self._provider_group.checkedButton()
         provider = str(button.property("provider")) if button is not None else "tracking"
+        color_button = self._color_group.checkedButton()
+        if color_button is not None:
+            self._runtime.config.my_color = str(color_button.property("color"))
         level = str(self._check_level) if self._check_level is not None else None
         self._runtime.finish_setup(provider, level)
         self.finished.emit()

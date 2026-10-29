@@ -46,6 +46,8 @@ Estas respuestas reemplazan a las preguntas abiertas de la primera versión de e
 
 ## 1. Hitos del MVP
 
+> **Estado al 2026-10-29**: H0, H1, H2 y H3 implementados (PRs #2, #3, #4 y #5, uno por hito, cada uno sobre el anterior). Falta probar H1–H3 con la cámara y el tablero reales del autor y ajustar umbrales (ver §10.2). Documentos nuevos: `docs/SETUP.md`, `docs/STATES.md`, `docs/EXTENDING.md`.
+
 | Hito | Qué se puede hacer al terminarlo | Etapa del PLAN |
 |---|---|---|
 | **H0 — Corre** | `uv run chessoptic` abre la ventana lateral con el aspecto final (vacía), `chessoptic doctor` dice qué falta. CI verde en Windows, macOS y Linux. | Etapa 0 |

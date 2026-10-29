@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib
 import json
 import platform
-import shutil
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -77,10 +76,9 @@ def _camera_hint() -> str:
 
 
 def stockfish_executable() -> str | None:
-    configured = load_config().stockfish_path
-    if configured and shutil.which(configured):
-        return configured
-    return shutil.which("stockfish")
+    from chessoptic.adapters.local.stockfish import find_stockfish
+
+    return find_stockfish(load_config())
 
 
 def check_stockfish() -> CheckResult:
