@@ -136,12 +136,22 @@ class WizardView(QWidget):
             self._build_provider_step,
         ):
             page = QWidget(self)
-            builder(page)
-            scroll = QScrollArea(self)
+            actions = builder(page)
+            holder = QWidget(self)
+            holder_layout = QVBoxLayout(holder)
+            holder_layout.setContentsMargins(0, 0, 0, 0)
+            holder_layout.setSpacing(8)
+            scroll = QScrollArea(holder)
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QFrame.Shape.NoFrame)
             scroll.setWidget(page)
-            self._stack.addWidget(scroll)
+            holder_layout.addWidget(scroll, 1)
+            if actions is not None:
+                bar = QWidget(holder)  # stays visible however long the page is
+                bar.setObjectName("actionBar")
+                bar.setLayout(actions)
+                holder_layout.addWidget(bar)
+            self._stack.addWidget(holder)
 
         bridge.cameras_listed.connect(self._on_cameras)
         bridge.frames_ready.connect(self._on_frames)
@@ -177,7 +187,7 @@ class WizardView(QWidget):
 
     # ---- step 1: camera -----------------------------------------------------
 
-    def _build_camera_step(self, page: QWidget) -> None:
+    def _build_camera_step(self, page: QWidget) -> QHBoxLayout | None:
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(10)
@@ -210,6 +220,7 @@ class WizardView(QWidget):
             )
         )
         layout.addStretch(1)
+        return None
 
     def _on_cameras(self, event: CamerasListed) -> None:
         self._cameras = list(event.cameras)
@@ -255,7 +266,7 @@ class WizardView(QWidget):
 
     # ---- step 2: framing + corners ---------------------------------------------
 
-    def _build_corners_step(self, page: QWidget) -> None:
+    def _build_corners_step(self, page: QWidget) -> QHBoxLayout | None:
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(10)
@@ -312,8 +323,8 @@ class WizardView(QWidget):
         confirm.clicked.connect(lambda: self.go_to(2))
         row.addWidget(back)
         row.addWidget(confirm, 1)
-        layout.addLayout(row)
         layout.addStretch(1)
+        return row
 
     def _enter_corners(self) -> None:
         calibration = self._runtime.calibration
@@ -350,7 +361,7 @@ class WizardView(QWidget):
 
     # ---- step 3: initial position --------------------------------------------
 
-    def _build_initial_step(self, page: QWidget) -> None:
+    def _build_initial_step(self, page: QWidget) -> QHBoxLayout | None:
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(10)
@@ -377,8 +388,8 @@ class WizardView(QWidget):
         row.addWidget(back)
         row.addWidget(retrain)
         row.addWidget(self._initial_next, 1)
-        layout.addLayout(row)
         layout.addStretch(1)
+        return row
 
     def _enter_initial(self) -> None:
         self._initial_view.set_a1(self._a1)
@@ -421,7 +432,7 @@ class WizardView(QWidget):
 
     # ---- step 4: detection check -------------------------------------------------
 
-    def _build_check_step(self, page: QWidget) -> None:
+    def _build_check_step(self, page: QWidget) -> QHBoxLayout | None:
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(10)
@@ -458,8 +469,8 @@ class WizardView(QWidget):
         row.addWidget(retry)
         row.addWidget(corners)
         row.addWidget(self._check_next, 1)
-        layout.addLayout(row)
         layout.addStretch(1)
+        return row
 
     def _enter_check(self) -> None:
         self._check_view.set_a1(self._a1)
@@ -511,7 +522,7 @@ class WizardView(QWidget):
 
     # ---- step 5: move test -------------------------------------------------------
 
-    def _build_move_test_step(self, page: QWidget) -> None:
+    def _build_move_test_step(self, page: QWidget) -> QHBoxLayout | None:
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(10)
@@ -546,8 +557,8 @@ class WizardView(QWidget):
         row.addWidget(retry)
         row.addWidget(skip)
         row.addWidget(self._move_next, 1)
-        layout.addLayout(row)
         layout.addStretch(1)
+        return row
 
     def _enter_move_test(self) -> None:
         self._move_view.set_a1(self._a1)
@@ -580,7 +591,7 @@ class WizardView(QWidget):
 
     # ---- step 6: provider ---------------------------------------------------------
 
-    def _build_provider_step(self, page: QWidget) -> None:
+    def _build_provider_step(self, page: QWidget) -> QHBoxLayout | None:
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(10)
@@ -631,8 +642,8 @@ class WizardView(QWidget):
         start.clicked.connect(self._finish)
         row.addWidget(back)
         row.addWidget(start, 1)
-        layout.addLayout(row)
         layout.addStretch(1)
+        return row
 
     def _on_provider_choice(self, button: QRadioButton) -> None:
         self._color_box.setVisible(str(button.property("provider")) == "stockfish")

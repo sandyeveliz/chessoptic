@@ -5,12 +5,10 @@ from __future__ import annotations
 import chess
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QFrame,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -52,17 +50,12 @@ class LiveView(QWidget):
         self._runtime = runtime
         self._state: DriverState | None = None
         self._info: GameInfo | None = None
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        scroll = QScrollArea(self)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        outer.addWidget(scroll)
-        page = QWidget(self)
-        scroll.setWidget(page)
+        # Everything fits the panel: the camera takes whatever height is left, so the state
+        # block, the last moves and the actions never scroll out of sight.
+        page = self
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(16, 10, 16, 12)
+        layout.setSpacing(10)
 
         self._strip = HealthStrip(page)
         layout.addWidget(self._strip)
@@ -86,12 +79,14 @@ class LiveView(QWidget):
         layout.addLayout(header)
 
         self._camera = CameraView("rectified", page)
-        layout.addWidget(self._camera)
+        self._camera.set_fit(True)
+        self._camera.setMinimumHeight(160)
+        layout.addWidget(self._camera, 1)
 
         moves_label = QLabel("ÚLTIMAS JUGADAS", page)
         moves_label.setObjectName("sectionLabel")
         layout.addWidget(moves_label)
-        self._moves = MovesList(4, page)
+        self._moves = MovesList(3, page)
         layout.addWidget(self._moves)
 
         actions = QHBoxLayout()
@@ -104,7 +99,6 @@ class LiveView(QWidget):
         actions.addWidget(export)
         actions.addStretch(1)
         layout.addLayout(actions)
-        layout.addStretch(1)
 
         bridge.health_changed.connect(self.set_health)
         bridge.frames_ready.connect(self._on_frames)

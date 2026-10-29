@@ -53,8 +53,15 @@ class CameraView(QWidget):
         self._drag_index: int | None = None
         self._caption = ""
         self._placeholder = "Sin imagen"
+        self._fit = False  # True: take whatever height the layout gives (no height-for-width)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setMinimumHeight(120)
+
+    def set_fit(self, fit: bool) -> None:
+        """Fill the space the layout gives instead of forcing a square: the image is
+        letterboxed, so the rest of the page never scrolls because of the camera."""
+        self._fit = fit
+        self.updateGeometry()
 
     # ---- state -----------------------------------------------------------
 
@@ -110,7 +117,7 @@ class CameraView(QWidget):
         return int(width * 9 / 16)
 
     def hasHeightForWidth(self) -> bool:  # noqa: N802 - Qt override
-        return True
+        return not self._fit
 
     # ---- geometry helpers --------------------------------------------------
 
@@ -125,7 +132,8 @@ class CameraView(QWidget):
             return QRectF((w - side) / 2, (h - side) / 2, side, side)
         scale = min(w / image.width(), h / image.height())
         tw, th = image.width() * scale, image.height() * scale
-        return QRectF((w - tw) / 2, (h - th) / 2, tw, th)
+        top = 0.0 if self._fit else (h - th) / 2  # fit mode: hug the content above, no gap
+        return QRectF((w - tw) / 2, top, tw, th)
 
     def _to_widget(self, point: Corner, target: QRectF) -> QPointF:
         image = self._image()
