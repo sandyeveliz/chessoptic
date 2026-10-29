@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import chess
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from chessoptic.core.events import (
     DriverState,
@@ -75,7 +75,7 @@ class StateBlock(QFrame):
         layout.addWidget(self._detail)
 
         self._buttons = QWidget(self)
-        self._buttons_layout = QHBoxLayout(self._buttons)
+        self._buttons_layout = QGridLayout(self._buttons)
         self._buttons_layout.setContentsMargins(0, 4, 0, 0)
         self._buttons_layout.setSpacing(8)
         layout.addWidget(self._buttons)
@@ -127,13 +127,14 @@ class StateBlock(QFrame):
             widget = item.widget() if item is not None else None
             if widget is not None:
                 widget.deleteLater()
-        for text, slot, primary in specs:
+        columns = 2 if len(specs) > 2 else max(1, len(specs))
+        for index, (text, slot, primary) in enumerate(specs):
             button = QPushButton(text, self._buttons)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             if primary:
                 button.setProperty("primary", "true")
             button.clicked.connect(slot)
-            self._buttons_layout.addWidget(button, 1 if primary else 0)
+            self._buttons_layout.addWidget(button, index // columns, index % columns)
         self._buttons.setVisible(bool(specs))
 
     def refresh(self) -> None:
