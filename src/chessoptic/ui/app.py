@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import platform
 import sys
 
 from chessoptic.core.config import load_config
@@ -45,6 +46,8 @@ def run_app(smoke: bool = False) -> int:
 
 
 def _has_display() -> bool:
-    if sys.platform.startswith("linux"):
+    # platform.system() instead of sys.platform: mypy narrows the latter per OS and then
+    # flags the other branch as unreachable on that OS.
+    if platform.system() == "Linux":
         return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
     return True
