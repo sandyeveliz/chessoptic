@@ -41,6 +41,7 @@ src = ["src"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "N", "W"]
 ignore = ["RUF012"]
+allowed-confusables = ["–", "×"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["chessoptic"]
