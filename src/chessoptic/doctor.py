@@ -8,13 +8,9 @@ import platform
 import shutil
 import subprocess
 import sys
-import threading
 from dataclasses import asdict, dataclass
 
 from chessoptic.core.config import load_config
-
-CAMERA_PROBE_INDICES = range(0, 6)
-CAMERA_PROBE_TIMEOUT_S = 3.0
 
 
 @dataclass
@@ -49,71 +45,16 @@ def check_dependency(module: str, label: str, pip_name: str) -> CheckResult:
     return CheckResult(label, True, str(version))
 
 
-def _camera_backend() -> int:
-    import cv2
-
-    system = platform.system()
-    if system == "Windows":
-        # MSMF is not built into the headless wheel; DSHOW opens devices by index fine.
-        return int(cv2.CAP_DSHOW)
-    if system == "Darwin":
-        return int(cv2.CAP_AVFOUNDATION)
-    return int(cv2.CAP_V4L2)
-
-
-def _probe_camera(index: int) -> tuple[int, int] | None:
-    """Return (width, height) if a camera opens at `index`, else None. May block."""
-    import cv2
-
-    cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
-    cap = cv2.VideoCapture(index, _camera_backend())
-    try:
-        if not cap.isOpened():
-            return None
-        ok, _frame = cap.read()
-        if not ok:
-            return None
-        return int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    finally:
-        cap.release()
-
-
-def _probe_camera_with_timeout(index: int, timeout_s: float) -> tuple[int, int] | None:
-    """Run `_probe_camera` in a daemon thread; give up (None) if it does not return in time."""
-    result: list[tuple[int, int] | None] = []
-
-    def worker() -> None:
-        try:
-            result.append(_probe_camera(index))
-        except Exception:
-            result.append(None)
-
-    thread = threading.Thread(target=worker, daemon=True)
-    thread.start()
-    thread.join(timeout_s)
-    if thread.is_alive() or not result:
-        return None
-    return result[0]
-
-
-def list_cameras() -> list[tuple[int, tuple[int, int]]]:
-    """Probe camera indices with a timeout each (OpenCV can hang on some devices)."""
-    found: list[tuple[int, tuple[int, int]]] = []
-    for index in CAMERA_PROBE_INDICES:
-        size = _probe_camera_with_timeout(index, CAMERA_PROBE_TIMEOUT_S)
-        if size is not None:
-            found.append((index, size))
-    return found
-
-
 def check_cameras() -> CheckResult:
+    from chessoptic.capture.webcam import list_cameras
+
     try:
         cameras = list_cameras()
     except Exception as exc:
         return CheckResult("Cámaras", False, f"error al enumerar: {exc}", _camera_hint())
     if not cameras:
         return CheckResult("Cámaras", False, "ninguna cámara responde", _camera_hint())
-    detail = ", ".join(f"#{i} ({w}x{h})" for i, (w, h) in cameras)
+    detail = ", ".join(f"#{c.index} {c.label}" for c in cameras)
     return CheckResult("Cámaras", True, detail)
 
 

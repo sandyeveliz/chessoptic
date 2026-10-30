@@ -36,8 +36,10 @@ def run_app(smoke: bool = False) -> int:
     app.setFont(QFont(tokens.font_sans, 10))
     app.setStyleSheet(full_stylesheet(tokens))
 
-    config = load_config()
-    window = MainWindow(config)
+    from chessoptic.core.runtime import CoreRuntime
+
+    runtime = CoreRuntime(load_config())
+    window = MainWindow(runtime)
     window.show()
 
     if smoke:

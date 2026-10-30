@@ -6,6 +6,7 @@ import json
 import logging
 import os
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -94,4 +95,48 @@ def save_config(config: AppConfig) -> None:
     path = config_path()
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(asdict(config), indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(path)
+
+
+# ---------------------------------------------------------------- camera profiles
+
+
+@dataclass
+class CameraProfile:
+    """Everything the setup wizard learned about one camera + board combination."""
+
+    camera_key: str
+    calibration: dict[str, Any]
+    classifier: dict[str, Any] | None = None
+    check_level: str | None = None
+    updated: str = field(default_factory=lambda: datetime.now(UTC).isoformat(timespec="seconds"))
+
+
+def profiles_dir() -> Path:
+    path = config_dir() / "cameras"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def profile_path(camera_key: str) -> Path:
+    return profiles_dir() / f"{camera_key}.json"
+
+
+def load_profile(camera_key: str) -> CameraProfile | None:
+    path = profile_path(camera_key)
+    if not path.exists():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return _from_dict(CameraProfile, raw)
+    except (OSError, json.JSONDecodeError, TypeError, KeyError) as exc:
+        log.warning("camera profile %s unreadable (%s)", path, exc)
+        return None
+
+
+def save_profile(profile: CameraProfile) -> None:
+    profile.updated = datetime.now(UTC).isoformat(timespec="seconds")
+    path = profile_path(profile.camera_key)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(asdict(profile), indent=2, ensure_ascii=False), encoding="utf-8")
     tmp.replace(path)

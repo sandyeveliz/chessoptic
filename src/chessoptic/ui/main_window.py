@@ -1,4 +1,4 @@
-"""The side panel: header with brand + health pill, stacked pages, bottom nav."""
+"""The side panel: header with brand + health pill; either the setup wizard or the tabs."""
 
 from __future__ import annotations
 
@@ -13,19 +13,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from chessoptic.core.config import AppConfig, save_config
+from chessoptic.core.config import save_config
 from chessoptic.core.events import HealthLevel, HealthState
+from chessoptic.core.runtime import CoreRuntime
+from chessoptic.ui.bridge import CoreBridge
+from chessoptic.ui.views.camera_tab import CameraTab
+from chessoptic.ui.views.live import LiveView
+from chessoptic.ui.views.wizard import WizardView
 from chessoptic.ui.widgets.health_pill import HealthPill
-from chessoptic.ui.widgets.nav_bar import NAV_ITEMS, NavBar
+from chessoptic.ui.widgets.nav_bar import NavBar
 
 MIN_WIDTH = 300
 DEFAULT_WIDTH = 380
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(self, runtime: CoreRuntime) -> None:
         super().__init__()
-        self._config = config
+        self._runtime = runtime
+        self._config = runtime.config
+        self._bridge = CoreBridge(runtime.bus, self)
         self.setWindowTitle("ChessOptic")
         self.setMinimumWidth(MIN_WIDTH)
 
@@ -34,21 +41,41 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(root)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-
         layout.addWidget(self._build_header())
 
-        self._pages = QStackedWidget(root)
-        for _key, label in NAV_ITEMS:
-            self._pages.addWidget(self._placeholder(label))
-        layout.addWidget(self._pages, 1)
+        # Two modes: wizard (no nav) and shell (tabs + nav).
+        self._modes = QStackedWidget(root)
+        layout.addWidget(self._modes, 1)
 
-        self._nav = NavBar(root)
+        self._wizard = WizardView(runtime, self._bridge, self)
+        self._wizard.finished.connect(self._show_shell)
+        self._modes.addWidget(self._wizard)
+
+        shell = QWidget(self)
+        shell_layout = QVBoxLayout(shell)
+        shell_layout.setContentsMargins(0, 0, 0, 0)
+        shell_layout.setSpacing(0)
+        self._pages = QStackedWidget(shell)
+        self._live = LiveView(self._bridge, shell)
+        self._live.recalibrate_requested.connect(lambda: self.start_wizard(0))
+        self._camera_tab = CameraTab(runtime, self._bridge, shell)
+        self._camera_tab.recalibrate_requested.connect(lambda: self.start_wizard(2))
+        self._camera_tab.recheck_requested.connect(lambda: self.start_wizard(3))
+        self._pages.addWidget(self._live)
+        self._pages.addWidget(self._camera_tab)
+        self._pages.addWidget(self._placeholder("Log"))
+        self._pages.addWidget(self._placeholder("Ajustes"))
+        shell_layout.addWidget(self._pages, 1)
+        self._nav = NavBar(shell)
         self._nav.page_selected.connect(self._pages.setCurrentIndex)
-        layout.addWidget(self._nav)
+        shell_layout.addWidget(self._nav)
+        self._modes.addWidget(shell)
 
         self.setCentralWidget(root)
-        self.set_always_on_top(config.window.always_on_top)
+        self._bridge.health_changed.connect(self.set_health)
+        self.set_always_on_top(self._config.window.always_on_top)
         self._restore_geometry()
+        self.start_wizard(0)
 
     # ---- building blocks -------------------------------------------------
 
@@ -57,18 +84,16 @@ class MainWindow(QMainWindow):
         header.setObjectName("header")
         layout = QHBoxLayout(header)
         layout.setContentsMargins(16, 12, 16, 12)
-
         brand = QHBoxLayout()
         brand.setSpacing(0)
-        chess = QLabel("Chess", header)
-        chess.setObjectName("brand")
-        optic = QLabel("Optic", header)
-        optic.setObjectName("brandAccent")
-        brand.addWidget(chess)
-        brand.addWidget(optic)
+        chess_label = QLabel("Chess", header)
+        chess_label.setObjectName("brand")
+        optic_label = QLabel("Optic", header)
+        optic_label.setObjectName("brandAccent")
+        brand.addWidget(chess_label)
+        brand.addWidget(optic_label)
         layout.addLayout(brand)
         layout.addStretch(1)
-
         self._pill = HealthPill(header)
         layout.addWidget(self._pill)
         return header
@@ -78,9 +103,8 @@ class MainWindow(QMainWindow):
         page.setObjectName("page")
         layout = QVBoxLayout(page)
         layout.setContentsMargins(16, 16, 16, 16)
-        title = QLabel(label, page)
+        title = QLabel(label.upper(), page)
         title.setObjectName("sectionLabel")
-        title.setText(label.upper())
         hint = QLabel("Próximamente", page)
         hint.setObjectName("muted")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -88,7 +112,18 @@ class MainWindow(QMainWindow):
         layout.addWidget(hint, 1)
         return page
 
-    # ---- public API used by the bridge / controller ----------------------
+    # ---- modes -------------------------------------------------------------
+
+    def start_wizard(self, step: int) -> None:
+        self._modes.setCurrentIndex(0)
+        self._wizard.start(step)
+
+    def _show_shell(self) -> None:
+        self._modes.setCurrentIndex(1)
+        self._nav.select(0)
+        self._pages.setCurrentIndex(0)
+
+    # ---- public API --------------------------------------------------------
 
     def set_health(self, state: HealthState) -> None:
         self._pill.set_state(state.level, state.pill_text)
@@ -103,7 +138,7 @@ class MainWindow(QMainWindow):
             self.show()
         self._config.window.always_on_top = enabled
 
-    # ---- geometry --------------------------------------------------------
+    # ---- geometry ----------------------------------------------------------
 
     def _restore_geometry(self) -> None:
         win = self._config.window
@@ -126,4 +161,5 @@ class MainWindow(QMainWindow):
         win.x, win.y = geometry.x(), geometry.y()
         win.width, win.height = geometry.width(), geometry.height()
         save_config(self._config)
+        self._runtime.shutdown()
         super().closeEvent(event)
