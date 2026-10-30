@@ -177,6 +177,31 @@ class MoveTestProgress:
     error: str = ""  # human-readable list of those squares, empty when nothing is wrong
 
 
+# ---------------------------------------------------------------- detection phases
+
+
+class DetectionPhase(StrEnum):
+    """What the driver is doing with the camera right now, inside a turn (docs/STATES.md)."""
+
+    IDLE = "idle"  # nothing to detect (standby, game over)
+    WAITING = "waiting"  # board quiet and as expected: waiting for a hand
+    HAND = "hand"  # motion on the board
+    READING = "reading"  # quiet again, interpreting the first stable frame
+    LIFTED = "lifted"  # a piece left its square; waiting for it to land
+    SEEN = "seen"  # a move fits; confirming on the next frame
+    ACCEPTED = "accepted"  # move accepted (sent / verified)
+    UNEXPLAINED = "unexplained"  # quiet board that fits no legal move; countdown to mismatch
+    MISMATCH = "mismatch"  # countdown expired
+    THINKING = "thinking"  # the opponent / engine is thinking; nothing to detect
+
+
+@dataclass(frozen=True)
+class DetectionState:
+    phase: DetectionPhase
+    detail: str  # short human text ("levantaste el peón de e2")
+    squares: tuple[int, ...] = ()  # squares involved (to highlight)
+
+
 # ---------------------------------------------------------------- board events (tracker → session)
 
 

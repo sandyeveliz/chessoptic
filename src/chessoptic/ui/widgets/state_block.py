@@ -9,9 +9,19 @@ from __future__ import annotations
 
 import chess
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from chessoptic.core.events import (
+    DetectionPhase,
+    DetectionState,
     DriverState,
     DriverStateName,
     GameInfo,
@@ -48,6 +58,8 @@ class StateBlock(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("stateBlock")
+        # Keep the card at its natural height: the camera view is what shrinks, never the buttons.
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         self._variant = ""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
@@ -69,10 +81,14 @@ class StateBlock(QFrame):
         self._detail = QLabel("", self)
         self._detail.setWordWrap(True)
         self._detail.setStyleSheet("font-size: 12px;")
+        self._detection_label = QLabel("", self)
+        self._detection_label.setWordWrap(True)
+        self._detection_label.hide()
         layout.addWidget(self._label)
         layout.addWidget(self._title)
         layout.addWidget(self._big)
         layout.addWidget(self._detail)
+        layout.addWidget(self._detection_label)
 
         self._buttons = QWidget(self)
         self._buttons_layout = QGridLayout(self._buttons)
@@ -84,6 +100,7 @@ class StateBlock(QFrame):
         self._info: GameInfo | None = None
         self._pending: PendingOpponentMove | None = None
         self._both_sides = True
+        self._detection: DetectionState | None = None
         self.refresh()
 
     # ---- inputs ----------------------------------------------------------
@@ -100,6 +117,33 @@ class StateBlock(QFrame):
     def set_pending(self, pending: PendingOpponentMove | None) -> None:
         self._pending = pending
         self.refresh()
+
+    def set_detection(self, detection: DetectionState) -> None:
+        """Second line of the card: what the camera is doing right now (docs/STATES.md)."""
+        self._detection = detection
+        self._render_detection()
+
+    def _render_detection(self) -> None:
+        detection = self._detection
+        if detection is None or detection.phase == DetectionPhase.IDLE or not detection.detail:
+            self._detection_label.hide()
+            return
+        light = self._variant == "my_turn"
+        colors = {
+            DetectionPhase.WAITING: "rgba(255,255,255,0.85)" if light else TOKENS.muted,
+            DetectionPhase.HAND: "#FFFFFF" if light else TOKENS.turn,
+            DetectionPhase.READING: "#FFFFFF" if light else TOKENS.turn,
+            DetectionPhase.LIFTED: "#FFFFFF" if light else TOKENS.turn,
+            DetectionPhase.SEEN: "#FFFFFF" if light else TOKENS.ok,
+            DetectionPhase.ACCEPTED: "#FFFFFF" if light else TOKENS.ok,
+            DetectionPhase.UNEXPLAINED: "#FFE2A8" if light else TOKENS.warn,
+            DetectionPhase.MISMATCH: TOKENS.err,
+            DetectionPhase.THINKING: TOKENS.muted,
+        }
+        color = colors.get(detection.phase, TOKENS.muted)
+        self._detection_label.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {color};")
+        self._detection_label.setText(f"• {detection.detail}")
+        self._detection_label.show()
 
     # ---- rendering -------------------------------------------------------
 
@@ -120,6 +164,7 @@ class StateBlock(QFrame):
             f"color: {color};"
         )
         self._detail.setStyleSheet(f"font-size: 12px; color: {muted};")
+        self._render_detection()
 
     def _set_buttons(self, specs: list[tuple[str, object, bool]]) -> None:
         while self._buttons_layout.count():

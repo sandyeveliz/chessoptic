@@ -17,6 +17,8 @@ from chessoptic.board.occupancy import Grid, from_board
 from chessoptic.core.events import (
     AdapterError,
     CalibrationChanged,
+    DetectionPhase,
+    DetectionState,
     DriverState,
     DriverStateName,
     GameInfo,
@@ -111,6 +113,7 @@ class LiveView(QWidget):
         bridge.game_info.connect(self._on_info)
         bridge.pending_changed.connect(self._on_pending)
         bridge.position_mismatch.connect(self._on_mismatch)
+        bridge.detection_state.connect(self._on_detection)
         bridge.adapter_error.connect(self._on_error)
         bridge.calibration_changed.connect(self._on_calibration)
 
@@ -194,6 +197,17 @@ class LiveView(QWidget):
             self._camera.set_highlights(
                 {event.pending.from_square: "origin", event.pending.to_square: "destination"}
             )
+
+    def _on_detection(self, detection: DetectionState) -> None:
+        self._block.set_detection(detection)
+        if detection.phase in (DetectionPhase.LIFTED, DetectionPhase.SEEN) and detection.squares:
+            highlights = {sq: "origin" for sq in detection.squares}
+            self._camera.set_highlights(highlights)
+        elif detection.phase == DetectionPhase.UNEXPLAINED and detection.squares:
+            self._camera.set_highlights({sq: "error" for sq in detection.squares})
+        elif detection.phase in (DetectionPhase.WAITING, DetectionPhase.ACCEPTED):
+            if self._state is not None and self._state.state not in KEEP_HIGHLIGHTS:
+                self._camera.set_highlights(self._last_move_highlights())
 
     def _on_mismatch(self, event: PositionMismatch) -> None:
         self._camera.set_highlights({issue.square: "error" for issue in event.issues})

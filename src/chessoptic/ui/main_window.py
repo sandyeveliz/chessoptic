@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QCloseEvent, QGuiApplication
+from PySide6.QtGui import QCloseEvent, QGuiApplication, QMouseEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -27,6 +27,18 @@ from chessoptic.ui.widgets.nav_bar import NavBar
 
 MIN_WIDTH = 300
 DEFAULT_WIDTH = 380
+
+
+class _DragHandle(QWidget):
+    """Widget that moves the top-level window when dragged (besides the OS title bar)."""
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt override
+        if event.button() == Qt.MouseButton.LeftButton:
+            handle = self.window().windowHandle()
+            if handle is not None:
+                handle.startSystemMove()
+                return
+        super().mousePressEvent(event)
 
 
 class MainWindow(QMainWindow):
@@ -89,7 +101,7 @@ class MainWindow(QMainWindow):
     # ---- building blocks -------------------------------------------------
 
     def _build_header(self) -> QWidget:
-        header = QWidget(self)
+        header = _DragHandle(self)  # the app header also drags the window
         header.setObjectName("header")
         layout = QHBoxLayout(header)
         layout.setContentsMargins(16, 12, 16, 12)
@@ -151,6 +163,12 @@ class MainWindow(QMainWindow):
             height = win.height or 860
             x = win.x or 0
             y = win.y or 0
+        if available is not None:
+            # Never taller than the work area, never off-screen (a saved geometry from another
+            # monitor layout would otherwise leave the title bar unreachable).
+            height = min(height, available.height() - 8)
+            x = min(max(x, available.left()), available.right() - width + 1)
+            y = min(max(y, available.top()), available.bottom() - 120)
         self.setGeometry(x, y, width, height)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt override

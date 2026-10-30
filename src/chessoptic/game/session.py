@@ -23,6 +23,8 @@ from chessoptic.board.tracker import BoardTracker
 from chessoptic.core.bus import EventBus
 from chessoptic.core.events import (
     AdapterError,
+    DetectionPhase,
+    DetectionState,
     DriverState,
     DriverStateName,
     GameInfo,
@@ -100,6 +102,7 @@ class GameSession:
         self._pending_opponent: PendingOpponentMove | None = None
         self._last_sent: str | None = None
         self._last_opponent: str | None = None
+        self._detection = DetectionState(DetectionPhase.IDLE, "")
         self._link = LinkState.INACTIVE
         self._detail = ""
         self._unsubscribe: list[Callable[[], None]] = []
@@ -234,11 +237,15 @@ class GameSession:
                 if not frame.stable:
                     if state == DriverStateName.MY_TURN:
                         self._set_state(DriverStateName.MOVING, "Detectando…")
+                    self._publish_detection(DetectionPhase.HAND, "Movimiento sobre el tablero…")
                     return
                 if state == DriverStateName.MOVING:
                     self._set_state(DriverStateName.MY_TURN, "")
             for event in self._tracker.on_occupancy(frame):
                 self._on_tracker_event(event)
+            self._publish_detection(
+                self._tracker.phase, self._tracker.phase_detail, self._tracker.phase_squares
+            )
 
     def _on_tracker_event(self, event: object) -> None:
         state = self._state
@@ -435,6 +442,25 @@ class GameSession:
         self._state = state
         self._detail = detail
         self._bus.publish(self.state)
+        # Each driver state starts with its own idle detection phase.
+        if state == DriverStateName.OPPONENT_TURN:
+            self._publish_detection(DetectionPhase.THINKING, "El rival piensa…")
+        elif state == DriverStateName.REPLAY:
+            self._publish_detection(DetectionPhase.WAITING, f"Esperando que reproduzcas {detail}")
+        elif state == DriverStateName.MY_TURN:
+            self._publish_detection(DetectionPhase.WAITING, "Esperando tu jugada")
+        elif state in (DriverStateName.MISMATCH, DriverStateName.VERIFYING_BOARD):
+            pass  # the tracker's own phase (mismatch / lifted) stays visible
+        elif state not in (DriverStateName.MOVING,):
+            self._publish_detection(DetectionPhase.IDLE, "")
+
+    def _publish_detection(
+        self, phase: DetectionPhase, detail: str, squares: tuple[int, ...] = ()
+    ) -> None:
+        current = DetectionState(phase, detail, squares)
+        if current != self._detection:
+            self._detection = current
+            self._bus.publish(current)
 
     def _publish_info(self) -> None:
         self._bus.publish(self.info)
