@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Qt runtime libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 \
+            libdbus-1-3 libfontconfig1
+
+      - name: Install
+        run: uv sync --all-groups
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Types
+        run: uv run mypy
+
+      - name: CLI
+        run: |
+          uv run chessoptic --version
+          uv run chessoptic doctor --json || true
+
+      - name: Smoke (window opens offscreen and exits)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          CHESSOPTIC_CONFIG_DIR: ${{ runner.temp }}/chessoptic-config
+        run: uv run chessoptic --smoke

@@ -51,6 +51,9 @@ No es una app de ajedrez. **Es el driver de un tablero virtual.** El ajedrez se 
 | Motor local | Stockfish (binario del sistema o descargado) vía UCI | Modo práctica offline y banco de pruebas de la visión. |
 | Distribución inicial | Paquete Python: `pipx install chessoptic` / `uv tool install chessoptic` + comando `chessoptic doctor` | Funciona en los tres SO sin instaladores; `doctor` explica qué falta. |
 | Distribución v1 estable | Instaladores nativos (.exe / .dmg / AppImage) con PyInstaller o Briefcase, en GitHub Releases | Para usuarios no técnicos. |
+| Proveedores (contra quién / dónde se juega) | **Adaptadores enchufables**: locales (Stockfish primero; cualquier motor UCI u otro que alguien sume por PR) y online (Lichess, chess.com vía Chessconnect, otros) | Que un tercero pueda agregar un proveedor sin tocar el núcleo ni la UI. |
+| Modos de juego | **Strategy**: el modo base es sin reloj; bullet/blitz/rápidas y otros vienen después, cada uno con su configuración | Hacer andar la detección antes que el reloj. |
+| Fase actual (2026-10-29) | **POC sin tests automáticos** hasta que la v1 funcione; CI solo lint + tipos. Orden e hitos en [`IMPLEMENTATION.md`](IMPLEMENTATION.md) | Ir rápido. La arquitectura (fuentes de frames inyectables, núcleo sin Qt) deja los tests posibles para después. |
 | Sin backend web / sin extensión propia | Descartado | Una UI en el navegador no puede abrir puertos ni emular BLE, y automatizar el DOM de chess.com tiene riesgo de ToS. |
 
 ### Descartado y por qué (para no volver a discutirlo)
@@ -83,21 +86,27 @@ No es una app de ajedrez. **Es el driver de un tablero virtual.** El ajedrez se 
 ```
 chessoptic/
 ├── src/chessoptic/
+│   ├── core/          # config, eventos/snapshots, bus, salud, runtime. Sin Qt.
 │   ├── capture/       # FrameSource: webcam, archivo de video, imágenes (para tests)
-│   ├── vision/        # calibración, homografía, clasificador de ocupación, estabilidad, (v2) detector de piezas
-│   ├── board/         # BoardModel: posición completa, seguimiento de jugadas, eventos
-│   ├── adapters/      # base.py + lichess.py + compat_*.py + native.py + local_engine.py
-│   ├── ui/            # PySide6: ventana lateral, pestañas, asistente de primer uso
+│   ├── vision/        # calibración, homografía, clasificador de ocupación, estabilidad, chequeo de setup
+│   ├── board/         # BoardModel: posición completa, inferencia por jugadas legales, tracker
+│   ├── game/          # GameSession (máquina de estados), modos de juego (Strategy), PGN
+│   ├── adapters/      # proveedores: base.py, tracking.py, local/ (motores UCI, Stockfish), online/ (después)
+│   ├── ui/            # PySide6: ventana lateral, pestañas, asistente de setup, tema QSS
+│   ├── assets/        # fuentes (OFL) e íconos empaquetados
 │   ├── doctor.py      # chequeo de dependencias / permisos / hardware por SO
-│   └── __main__.py    # `chessoptic` / `python -m chessoptic`
+│   ├── cli.py         # `chessoptic`, `chessoptic doctor`, (después) replay / calibrate
+│   └── __main__.py    # `python -m chessoptic`
 ├── tests/
-│   └── fixtures/      # videos y frames reales del tablero (Git LFS)
+│   └── fixtures/      # grabaciones reales del tablero (locales por ahora) + manifests
 ├── docs/
-│   ├── PLAN.md        # este documento
-│   ├── PROTOCOL.md    # protocolo nativo ChessOptic (spec abierta)
-│   ├── STATES.md      # máquina de estados detallada
-│   └── CALIBRATION.md # guía de cámara / luz / encuadre
-├── assets/            # logo, íconos
+│   ├── PLAN.md            # este documento
+│   ├── UI.md              # especificación de la interfaz
+│   ├── IMPLEMENTATION.md  # orden de implementación, hitos, mapeo UI, "para hacer en casa"
+│   ├── STATES.md          # máquina de estados detallada (se escribe en H2)
+│   ├── SETUP.md           # guía de cámara / luz / encuadre (se escribe en H1)
+│   └── PROTOCOL.md        # protocolo nativo ChessOptic (más adelante)
+├── assets/            # logo
 ├── pyproject.toml     # uv / hatchling
 ├── CLAUDE.md
 └── README.md
@@ -243,12 +252,14 @@ Especificación detallada de pantallas, tokens y datos: [`docs/UI.md`](UI.md). M
 
 ## 6. Etapas
 
-### Etapa 0 — Base del repo
-- [ ] `pyproject.toml` (uv + hatchling), paquete `chessoptic`, entrada `chessoptic` y `python -m chessoptic`.
-- [ ] Ruff + mypy (o pyright) + pytest; CI en GitHub Actions con matriz **Windows / macOS / Linux**.
-- [ ] `chessoptic doctor`: Python, OpenCV, cámara disponible, Bluetooth disponible, Stockfish en PATH, permisos por SO.
-- [ ] Ventana PySide6 vacía con layout de panel lateral y "siempre arriba".
-- [ ] README con instalación vía `pipx`/`uv tool`.
+> El orden real de trabajo, los hitos del POC (H0–H3) y el detalle por tarea están en [`IMPLEMENTATION.md`](IMPLEMENTATION.md). La Etapa 3 (Lichess) queda fuera de la v1 mínima: los proveedores online se deciden después de investigar Chessconnect.
+
+### Etapa 0 — Base del repo (hito H0)
+- [x] `pyproject.toml` (uv + hatchling), paquete `chessoptic`, entrada `chessoptic` y `python -m chessoptic`.
+- [x] Ruff + mypy; CI en GitHub Actions con matriz **Windows / macOS / Linux**. (pytest: después del POC.)
+- [x] `chessoptic doctor`: Python, OpenCV, cámara disponible, Stockfish en PATH, permisos por SO. (Bluetooth: "no evaluado" hasta que haya proveedores BLE.)
+- [x] Ventana PySide6 vacía con layout de panel lateral y "siempre arriba".
+- [x] README con instalación vía `pipx`/`uv tool`.
 
 **Aceptación**: `pipx install .` y `chessoptic` abren la ventana en los tres SO (CI verde).
 
