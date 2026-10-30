@@ -68,19 +68,26 @@ def wrong_squares(
     shadow still reads black, but the image did change). Untouched empty squares may look as
     before or truly empty.
     """
+    known = moved is not None  # the vision layer told us which squares' images changed
     moved = moved or set()
     wrong = []
     for sq in chess.SQUARES:
         in_move = current[sq] != target[sq]
         changed = grid[sq] != reference[sq] or sq in moved
-        if target[sq] != Occupancy.EMPTY:
-            ok = grid[sq] == target[sq] and (changed or not in_move)
-        elif in_move:
-            ok = changed and grid[sq] != Occupancy.WHITE  # vacated: empty or a dark shadow
+        # A label that flips while the image stays the same is classifier noise (a borderline
+        # square at the edge of the frame), never evidence that something happened there.
+        stale = known and sq not in moved
+        if in_move:
+            if target[sq] != Occupancy.EMPTY:
+                ok = grid[sq] == target[sq] and changed
+            else:
+                ok = changed and grid[sq] != Occupancy.WHITE  # vacated: empty or a dark shadow
+        elif target[sq] != Occupancy.EMPTY:
+            ok = grid[sq] == target[sq] or grid[sq] == reference[sq] or stale
         else:
             # Untouched empty square: as before, truly empty, or a dark phantom (a shadow reads
-            # "black"); only a bright reading is a real foreign piece.
-            ok = grid[sq] != Occupancy.WHITE or reference[sq] == Occupancy.WHITE
+            # "black"); only a bright reading on a changed image is a real foreign piece.
+            ok = grid[sq] != Occupancy.WHITE or reference[sq] == Occupancy.WHITE or stale
         if not ok:
             wrong.append(sq)
     return tuple(wrong)
@@ -92,6 +99,7 @@ def changed_squares(
     """Squares that look neither like the reference nor like the ideal current position (by
     label, or by image change on a square that disagrees with the position). Dark phantoms on
     empty squares (shadows) are not counted."""
+    known = moved is not None
     moved = moved or set()
     out = set()
     for sq in chess.SQUARES:
@@ -99,6 +107,8 @@ def changed_squares(
             continue
         if grid[sq] == reference[sq] and sq not in moved:
             continue
+        if known and sq not in moved:
+            continue  # label noise on an unchanged image
         out.add(sq)
     return out
 

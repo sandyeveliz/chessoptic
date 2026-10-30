@@ -115,7 +115,10 @@ class OccupancyFrame:
     changed: tuple[bool, ...] = ()
 
     @property
-    def changed_squares(self) -> set[int]:
+    def changed_squares(self) -> set[int] | None:
+        """Squares whose image changed since the reference; None when not known."""
+        if not self.changed:
+            return None
         return {sq for sq, flag in enumerate(self.changed) if flag}
 
     @property

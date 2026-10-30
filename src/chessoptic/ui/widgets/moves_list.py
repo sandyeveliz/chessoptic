@@ -6,19 +6,23 @@ import chess
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QWidget
 
-from chessoptic.core.events import GameInfo, MoveRecord
+from chessoptic.core.events import GameInfo, MoveRecord, PendingOpponentMove
 from chessoptic.ui.theme import TOKENS
+
+
+def _chip(text: str, background: str, color: str = "#FFFFFF") -> str:
+    return (
+        f"<span style='background:{background}; color:{color}; font-weight:600; "
+        f"padding:1px 6px; border-radius:4px;'>{text}</span>"
+    )
 
 
 def _san_html(rec: MoveRecord | None, latest: bool) -> str:
     if rec is None:
         return ""
-    if latest:
-        return (
-            f"<span style='background:{TOKENS.turn}; color:#FFFFFF; font-weight:600; "
-            f"padding:1px 6px; border-radius:4px;'>{rec.san}</span>"
-        )
-    return rec.san
+    if rec.source == "pending":
+        return _chip(rec.san, TOKENS.warn)
+    return _chip(rec.san, TOKENS.turn) if latest else rec.san
 
 
 class MovesList(QFrame):
@@ -51,10 +55,35 @@ class MovesList(QFrame):
         self._empty = QLabel("Todavía no hay jugadas.", self)
         self._empty.setObjectName("muted")
         self._grid.addWidget(self._empty, 0, 0, 1, 4)
+        self._info: GameInfo | None = None
+        self._pending: PendingOpponentMove | None = None
         self.set_info(None)
 
+    def set_pending(self, pending: PendingOpponentMove | None) -> None:
+        """The opponent's move waiting to be played on the board (shown as its own row)."""
+        self._pending = pending
+        self._render()
+
     def set_info(self, info: GameInfo | None) -> None:
+        self._info = info
+        self._render()
+
+    def _render(self) -> None:
+        info = self._info
         records = list(info.moves) if info else []
+        pending = self._pending
+        if pending is not None and info is not None:
+            # Provisional record: the row exists, the chip says it is still pending.
+            last = records[-1] if records else None
+            if last is None or last.color == chess.BLACK:
+                pend_number = (last.number + 1) if last else 1
+                pend_color = chess.WHITE
+            else:
+                pend_number = last.number
+                pend_color = chess.BLACK
+            records.append(
+                MoveRecord(pend_number, pend_color, pending.san, pending.uci, "pending", "")
+            )
         self._empty.setVisible(not records)
         for cells in self._cells:
             for label in cells:
@@ -82,9 +111,12 @@ class MovesList(QFrame):
             white.setText(_san_html(w, w is latest))
             black.setText(_san_html(b, b is latest))
             if latest in (w, b):
-                who = "rival" if latest.source == "opponent" else "vos"
-                if info is not None and info.both_sides:
-                    who = "blancas" if latest.color == chess.WHITE else "negras"
-                meta.setText(f"{who} · {latest.wall_time}")
+                if latest.source == "pending":
+                    meta.setText("rival · " + _chip("reproducila en el tablero", TOKENS.warn))
+                else:
+                    who = "rival · verificada" if latest.source == "opponent" else "vos"
+                    if info is not None and info.both_sides:
+                        who = "blancas" if latest.color == chess.WHITE else "negras"
+                    meta.setText(f"{who} · {latest.wall_time}")
             else:
                 meta.setText("")

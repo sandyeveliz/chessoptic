@@ -189,6 +189,7 @@ class LiveView(QWidget):
 
     def _on_pending(self, event: PendingOpponentChanged) -> None:
         self._block.set_pending(event.pending)
+        self._moves.set_pending(event.pending)
         if event.pending is not None:
             self._camera.set_highlights(
                 {event.pending.from_square: "origin", event.pending.to_square: "destination"}

@@ -221,10 +221,16 @@ class StateBlock(QFrame):
             self._apply_variant("mismatch")
             self._label.setText("⚠ LA POSICIÓN NO COINCIDE")
             self._title.setText("Revisá las casillas marcadas")
+            pending_text = (
+                f" Jugada del rival pendiente: {self._pending.san}." if self._pending else ""
+            )
             self._detail.setText(
-                f"Casillas: {detail}. Corregí las piezas y la jugada se verifica sola."
-                if detail
-                else "Corregí las piezas marcadas y la jugada se verifica sola."
+                (
+                    f"Casillas: {detail}. Corregí las piezas y la jugada se verifica sola."
+                    if detail
+                    else "Corregí las piezas marcadas y la jugada se verifica sola."
+                )
+                + pending_text
             )
             self._set_buttons([("Resincronizar", self.resync.emit, True)])
         elif name == DriverStateName.LINK_LOST:

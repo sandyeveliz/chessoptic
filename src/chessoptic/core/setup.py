@@ -147,7 +147,7 @@ class SetupFlow:
         elif self._move_stage in (MoveTestStage.WAITING_MOVE, MoveTestStage.WAITING_BACK):
             self._report_move_mismatch(event.grid, wrong)
 
-    def _move_wrong(self, grid: Grid, moved: set[int]) -> tuple[int, ...]:
+    def _move_wrong(self, grid: Grid, moved: set[int] | None) -> tuple[int, ...]:
         """Squares that keep the current stage from passing (same rule as BoardModel)."""
         if self._move_stage == MoveTestStage.WAITING_MOVE:
             return wrong_squares(grid, self._move_reference, STARTPOS, EXPECTED_E2E4, moved)
