@@ -357,6 +357,19 @@ class GameSession:
                 self._state_before_issue = DriverStateName.MY_TURN
                 self._set_state(DriverStateName.MISMATCH, "Deshacé la jugada en el tablero.")
             elif isinstance(event, OpponentMove):
+                after = self._model.board.copy(stack=False)
+                after.push(event.move)
+                ended = result_and_reason(after)
+                if ended is not None:
+                    # Mate, stalemate or a draw by the opponent's move: the game is over now,
+                    # whether or not the piece gets moved on the physical board.
+                    san = self._model.push(event.move)
+                    record = self._record(event.move.uci(), san, "opponent")
+                    self._last_opponent = record.san
+                    self._log("move", f"rival {record.san} · {ended[1]}")
+                    self._publish_info()
+                    self._on_adapter_event(GameOver(ended[0], ended[1]))
+                    return
                 self._tracker.expect(event.move)
                 self._pending_opponent = self._describe(event.move, event.san)
                 self._publish_pending(self._pending_opponent)

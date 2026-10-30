@@ -308,8 +308,9 @@ class StateBlock(QFrame):
             result = info.result if info and info.result else ""
             self._title.setText(result or "Fin de partida")
             moves = len(info.moves) if info else 0
+            last = f" Última: {info.moves[-1].san}." if info and info.moves else ""
             self._detail.setText(
-                f"{detail} · {moves} jugadas. Reordená el tablero para la próxima."
+                f"{detail} · {moves} jugadas.{last} Reordená el tablero para la próxima."
             )
             self._set_buttons(
                 [
