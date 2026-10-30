@@ -94,7 +94,7 @@ class StateBlock(QFrame):
 
     def set_info(self, info: GameInfo) -> None:
         self._info = info
-        self._both_sides = info.my_color is None
+        self._both_sides = info.both_sides
         self.refresh()
 
     def set_pending(self, pending: PendingOpponentMove | None) -> None:

@@ -181,6 +181,7 @@ class GameSession:
             fen=self._model.fen,
             last_sent=self._last_sent,
             last_opponent=self._last_opponent,
+            both_sides=self._adapter.info.both_sides,
         )
 
     def _phase(self) -> Phase:

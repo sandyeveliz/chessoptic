@@ -320,6 +320,7 @@ class GameInfo:
     white_ms: int | None = None
     black_ms: int | None = None
     last_sent: str | None = None  # SAN of my last move, once accepted
+    both_sides: bool = True  # tracking mode: the user plays both colours, no explicit start
     last_opponent: str | None = None  # SAN of the opponent's last move
 
 

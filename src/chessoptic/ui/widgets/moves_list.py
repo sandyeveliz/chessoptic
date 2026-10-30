@@ -83,7 +83,7 @@ class MovesList(QFrame):
             black.setText(_san_html(b, b is latest))
             if latest in (w, b):
                 who = "rival" if latest.source == "opponent" else "vos"
-                if info is not None and info.my_color is None:
+                if info is not None and info.both_sides:
                     who = "blancas" if latest.color == chess.WHITE else "negras"
                 meta.setText(f"{who} · {latest.wall_time}")
             else:
