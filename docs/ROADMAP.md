@@ -13,6 +13,7 @@ Objetivo: que jugar contra el motor sea una experiencia de verdad, no una demo.
 | Deshacer una jugada | No existe. | **Deshacer** la última jugada propia (y la respuesta del motor): el modelo vuelve atrás y el panel pide reponer las piezas, verificando como una jugada del rival. En seguimiento, deshacer la última de cualquier bando. |
 | Modos con tiempo | Solo `FreePlay` (sin reloj). La interfaz `GameMode` ya existe (Strategy). | `TimedMode` con controles clásicos (3+2, 5+0, 10+0, 15+10) y reloj en el bloque de estado; el tiempo propio corre desde que el motor mueve hasta que la cámara ve tu jugada. Pérdida por tiempo como `GameOver`. |
 | Historial de partidas | Cada partida se exporta a `<datos>/games/*.pgn` a pedido. | Guardar siempre el PGN al terminar con cabeceras completas (motor, nivel, color, control de tiempo, resultado) y una pestaña **Partidas** con el balance por configuración: ganadas / perdidas / tablas contra cada nivel, y abrir el PGN. |
+| Voz y notación | Hecho: la jugada del rival se dice en voz alta con las voces del SO (Qt TextToSpeech); notación en español (R D T A C) o inglés (K Q R B N) para el panel y la voz; Ajustes › Jugadas y voz con botón **Probar**. | Velocidad y volumen de la voz; decir también el fin de partida y los errores. |
 | Arrancar desde cualquier posición | Solo desde la posición inicial. | Pedir la posición por FEN o por foto con detección de piezas (Etapa 5 del PLAN). |
 
 ## v0.3 — Online
