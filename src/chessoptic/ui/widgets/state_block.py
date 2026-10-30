@@ -198,9 +198,7 @@ class StateBlock(QFrame):
             self._title.setText("")
             self._big.setText(pending.san if pending else detail)
             self._big.show()
-            self._detail.setText(
-                (pending.human_text if pending else "") + " Esperando que la cámara vea la jugada."
-            )
+            self._detail.setText(pending.human_text if pending else "")
             self._set_buttons([("Terminar", self.end_game.emit, False)])
         elif name == DriverStateName.PROMOTION:
             self._apply_variant("replay")
