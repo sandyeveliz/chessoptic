@@ -111,6 +111,15 @@ class OccupancyFrame:
     stable: bool
     motion: float
     ts: float
+    # Squares whose *image* changed since the last accepted position (empty = unknown).
+    changed: tuple[bool, ...] = ()
+
+    @property
+    def changed_squares(self) -> set[int] | None:
+        """Squares whose image changed since the reference; None when not known."""
+        if not self.changed:
+            return None
+        return {sq for sq, flag in enumerate(self.changed) if flag}
 
     @property
     def mean_confidence(self) -> float:
@@ -164,6 +173,33 @@ class MoveTestProgress:
     stage: MoveTestStage
     detail: str
     latency_ms: float | None = None
+    mismatched: tuple[int, ...] = ()  # squares that differ from what the stage expects
+    error: str = ""  # human-readable list of those squares, empty when nothing is wrong
+
+
+# ---------------------------------------------------------------- detection phases
+
+
+class DetectionPhase(StrEnum):
+    """What the driver is doing with the camera right now, inside a turn (docs/STATES.md)."""
+
+    IDLE = "idle"  # nothing to detect (standby, game over)
+    WAITING = "waiting"  # board quiet and as expected: waiting for a hand
+    HAND = "hand"  # motion on the board
+    READING = "reading"  # quiet again, interpreting the first stable frame
+    LIFTED = "lifted"  # a piece left its square; waiting for it to land
+    SEEN = "seen"  # a move fits; confirming on the next frame
+    ACCEPTED = "accepted"  # move accepted (sent / verified)
+    UNEXPLAINED = "unexplained"  # quiet board that fits no legal move; countdown to mismatch
+    MISMATCH = "mismatch"  # countdown expired
+    THINKING = "thinking"  # the opponent / engine is thinking; nothing to detect
+
+
+@dataclass(frozen=True)
+class DetectionState:
+    phase: DetectionPhase
+    detail: str  # short human text ("levantaste el peón de e2")
+    squares: tuple[int, ...] = ()  # squares involved (to highlight)
 
 
 # ---------------------------------------------------------------- board events (tracker → session)
@@ -312,6 +348,7 @@ class GameInfo:
     white_ms: int | None = None
     black_ms: int | None = None
     last_sent: str | None = None  # SAN of my last move, once accepted
+    both_sides: bool = True  # tracking mode: the user plays both colours, no explicit start
     last_opponent: str | None = None  # SAN of the opponent's last move
 
 

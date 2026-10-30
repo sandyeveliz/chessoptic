@@ -18,10 +18,10 @@ Corner = tuple[float, float]
 # Where the a1 square sits in the rectified image, as the user sees it.
 A1_CORNERS: tuple[str, ...] = ("bottom-left", "top-left", "top-right", "bottom-right")
 A1_LABELS: dict[str, str] = {
-    "bottom-left": "Abajo a la izquierda (juego con blancas)",
-    "top-right": "Arriba a la derecha (juego con negras)",
-    "top-left": "Arriba a la izquierda (tablero girado)",
-    "bottom-right": "Abajo a la derecha (tablero girado)",
+    "bottom-left": "Abajo a la izquierda",
+    "top-right": "Arriba a la derecha",
+    "top-left": "Arriba a la izquierda",
+    "bottom-right": "Abajo a la derecha",
 }
 
 

@@ -16,6 +16,7 @@ from chessoptic.core.events import (
     CamerasListed,
     CameraStatus,
     ClassifierTrained,
+    DetectionState,
     DriverState,
     FrameEvent,
     GameInfo,
@@ -62,6 +63,7 @@ class CoreBridge(QObject):
     log_entry = Signal(object)
     adapter_error = Signal(object)
     position_mismatch = Signal(object)
+    detection_state = Signal(object)
 
     def __init__(self, bus: EventBus, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -82,6 +84,7 @@ class CoreBridge(QObject):
         bus.subscribe(LogEntry, self.log_entry.emit)
         bus.subscribe(AdapterError, self.adapter_error.emit)
         bus.subscribe(PositionMismatch, self.position_mismatch.emit)
+        bus.subscribe(DetectionState, self.detection_state.emit)
 
     def _on_frame(self, event: FrameEvent) -> None:
         rectified = to_qimage(event.rectified) if event.rectified is not None else None

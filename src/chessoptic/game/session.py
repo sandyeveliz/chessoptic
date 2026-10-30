@@ -18,10 +18,13 @@ import chess
 
 from chessoptic.adapters.base import OutputAdapter
 from chessoptic.board.model import BoardModel
+from chessoptic.board.occupancy import Grid
 from chessoptic.board.tracker import BoardTracker
 from chessoptic.core.bus import EventBus
 from chessoptic.core.events import (
     AdapterError,
+    DetectionPhase,
+    DetectionState,
     DriverState,
     DriverStateName,
     GameInfo,
@@ -44,6 +47,7 @@ from chessoptic.core.events import (
     PositionMismatch,
 )
 from chessoptic.game.modes import GameMode
+from chessoptic.game.outcome import result_and_reason
 from chessoptic.game.pgn import save_pgn
 
 log = logging.getLogger(__name__)
@@ -77,6 +81,7 @@ class GameSession:
         mode: GameMode,
         mismatch_grace_ms: int = 2000,
         promotion_default: str = "ask",
+        on_accept: Callable[[Grid], None] | None = None,
     ) -> None:
         self._bus = bus
         self._adapter = adapter
@@ -84,7 +89,7 @@ class GameSession:
         self._promotion_default = promotion_default
         self._lock = threading.RLock()
         self._model = BoardModel(both_sides=adapter.info.both_sides)
-        self._tracker = BoardTracker(self._model, mismatch_grace_ms)
+        self._tracker = BoardTracker(self._model, mismatch_grace_ms, on_accept=on_accept)
         self._state = DriverStateName.VERIFYING_BOARD
         self._state_before_issue: DriverStateName = DriverStateName.MY_TURN
         self._my_color: bool | None = None
@@ -97,6 +102,7 @@ class GameSession:
         self._pending_opponent: PendingOpponentMove | None = None
         self._last_sent: str | None = None
         self._last_opponent: str | None = None
+        self._detection = DetectionState(DetectionPhase.IDLE, "")
         self._link = LinkState.INACTIVE
         self._detail = ""
         self._unsubscribe: list[Callable[[], None]] = []
@@ -150,6 +156,7 @@ class GameSession:
             self._promotion_candidates = ()
             fen_before = self._model.fen
             san = self._model.push(chosen)
+            self._tracker.notify_accept()
             self._handle_my_move(MoveDetected(chosen, san, fen_before, self._model.fen))
 
     def export_pgn(self) -> Path | None:
@@ -177,6 +184,7 @@ class GameSession:
             fen=self._model.fen,
             last_sent=self._last_sent,
             last_opponent=self._last_opponent,
+            both_sides=self._adapter.info.both_sides,
         )
 
     def _phase(self) -> Phase:
@@ -229,11 +237,15 @@ class GameSession:
                 if not frame.stable:
                     if state == DriverStateName.MY_TURN:
                         self._set_state(DriverStateName.MOVING, "Detectando…")
+                    self._publish_detection(DetectionPhase.HAND, "Movimiento sobre el tablero…")
                     return
                 if state == DriverStateName.MOVING:
                     self._set_state(DriverStateName.MY_TURN, "")
             for event in self._tracker.on_occupancy(frame):
                 self._on_tracker_event(event)
+            self._publish_detection(
+                self._tracker.phase, self._tracker.phase_detail, self._tracker.phase_squares
+            )
 
     def _on_tracker_event(self, event: object) -> None:
         state = self._state
@@ -287,6 +299,7 @@ class GameSession:
                 )
                 self._set_state(DriverStateName.MY_TURN, "")
                 self._publish_info()
+                self._check_game_over()
 
     def _handle_my_move(self, event: MoveDetected) -> None:
         self._pending_my_move = (event.move, event.san)
@@ -334,15 +347,29 @@ class GameSession:
                 else:
                     self._set_state(DriverStateName.OPPONENT_TURN, "Esperando…")
                 self._publish_info()
+                self._check_game_over()
             elif isinstance(event, MoveRejected):
                 self._pending_my_move = None
                 self._log("error", f"jugada rechazada: {event.reason}")
                 self._bus.publish(AdapterError(f"Jugada rechazada: {event.reason}"))
                 # The model already has the move; undo it so the board can be corrected.
-                self._model.board.pop()
+                self._model.pop()
                 self._state_before_issue = DriverStateName.MY_TURN
                 self._set_state(DriverStateName.MISMATCH, "Deshacé la jugada en el tablero.")
             elif isinstance(event, OpponentMove):
+                after = self._model.board.copy(stack=False)
+                after.push(event.move)
+                ended = result_and_reason(after)
+                if ended is not None:
+                    # Mate, stalemate or a draw by the opponent's move: the game is over now,
+                    # whether or not the piece gets moved on the physical board.
+                    san = self._model.push(event.move)
+                    record = self._record(event.move.uci(), san, "opponent")
+                    self._last_opponent = record.san
+                    self._log("move", f"rival {record.san} · {ended[1]}")
+                    self._publish_info()
+                    self._on_adapter_event(GameOver(ended[0], ended[1]))
+                    return
                 self._tracker.expect(event.move)
                 self._pending_opponent = self._describe(event.move, event.san)
                 self._publish_pending(self._pending_opponent)
@@ -360,6 +387,12 @@ class GameSession:
                 self._bus.publish(event)
 
     # ---- helpers -----------------------------------------------------------
+
+    def _check_game_over(self) -> None:
+        ended = result_and_reason(self._model.board)
+        if ended is None or self._state == DriverStateName.GAME_OVER:
+            return
+        self._on_adapter_event(GameOver(ended[0], ended[1]))
 
     def _reset_game(self) -> None:
         self._model.reset()
@@ -422,6 +455,25 @@ class GameSession:
         self._state = state
         self._detail = detail
         self._bus.publish(self.state)
+        # Each driver state starts with its own idle detection phase.
+        if state == DriverStateName.OPPONENT_TURN:
+            self._publish_detection(DetectionPhase.THINKING, "El rival piensa…")
+        elif state == DriverStateName.REPLAY:
+            self._publish_detection(DetectionPhase.WAITING, f"Esperando que reproduzcas {detail}")
+        elif state == DriverStateName.MY_TURN:
+            self._publish_detection(DetectionPhase.WAITING, "Esperando tu jugada")
+        elif state in (DriverStateName.MISMATCH, DriverStateName.VERIFYING_BOARD):
+            pass  # the tracker's own phase (mismatch / lifted) stays visible
+        elif state not in (DriverStateName.MOVING,):
+            self._publish_detection(DetectionPhase.IDLE, "")
+
+    def _publish_detection(
+        self, phase: DetectionPhase, detail: str, squares: tuple[int, ...] = ()
+    ) -> None:
+        current = DetectionState(phase, detail, squares)
+        if current != self._detection:
+            self._detection = current
+            self._bus.publish(current)
 
     def _publish_info(self) -> None:
         self._bus.publish(self.info)

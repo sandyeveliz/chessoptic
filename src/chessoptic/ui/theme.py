@@ -88,6 +88,7 @@ QWidget {{
   font-size: 13px;
 }}
 QLabel#muted {{ color: {muted}; }}
+QLabel#error {{ color: {err}; font-size: 12px; }}
 QLabel#sectionLabel {{
   color: {muted}; font-size: 11px; font-weight: 600; letter-spacing: 1px;
 }}
@@ -130,6 +131,7 @@ QPushButton {{
 QPushButton:hover {{ background: {bg}; }}
 QPushButton:disabled {{ color: {muted}; border-color: {line}; }}
 QPushButton[primary="true"] {{ background: {turn}; border-color: {turn}; color: #FFFFFF; }}
+QPushButton[primary="true"]:disabled {{ background: {line}; border-color: {line}; color: {muted}; }}
 QPushButton[primary="true"]:hover {{ background: {brand_light}; border-color: {brand_light}; }}
 
 /* ---- inputs ---- */

@@ -46,6 +46,8 @@ Estas respuestas reemplazan a las preguntas abiertas de la primera versión de e
 
 ## 1. Hitos del MVP
 
+> **Estado al 2026-10-30 (v0.1.0)**: H0–H3 implementados y probados con la cámara y el tablero reales del autor: partida completa contra Stockfish usando solo piezas físicas. Lo aprendido en esas pruebas (sombras, bordes del encuadre, estados de detección) está en `docs/STATES.md` y en el código del modelo de tablero. Lo que sigue: `docs/ROADMAP.md`.
+
 | Hito | Qué se puede hacer al terminarlo | Etapa del PLAN |
 |---|---|---|
 | **H0 — Corre** | `uv run chessoptic` abre la ventana lateral con el aspecto final (vacía), `chessoptic doctor` dice qué falta. CI verde en Windows, macOS y Linux. | Etapa 0 |
@@ -272,6 +274,8 @@ Las esquinas se completan después de grabar con `chessoptic calibrate --video <
 Es la parte del producto que decide si ChessOptic funciona con **tu** cámara, **tu** tablero y **tu** luz. Por eso el asistente no solo calibra: **verifica y diagnostica**.
 
 ### 4.1 El flujo (7 pasos; reemplaza a los 6 de UI.md §4, que se actualiza en este hito)
+
+> Implementado con **6 pasos**: los pasos 2 (encuadre) y 3 (esquinas) de esta tabla se fusionaron en uno solo con manijas arrastrables, a pedido del autor al probarlo con la cámara real. La elección de a1 es solo posicional; el color del usuario se elige en el paso de proveedor.
 
 | Paso | Pantalla | Qué hace el usuario | Qué hace ChessOptic | Mockup |
 |---|---|---|---|---|

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QCloseEvent, QGuiApplication
+from PySide6.QtGui import QCloseEvent, QGuiApplication, QMouseEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -29,6 +29,18 @@ MIN_WIDTH = 300
 DEFAULT_WIDTH = 380
 
 
+class _DragHandle(QWidget):
+    """Widget that moves the top-level window when dragged (besides the OS title bar)."""
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt override
+        if event.button() == Qt.MouseButton.LeftButton:
+            handle = self.window().windowHandle()
+            if handle is not None:
+                handle.startSystemMove()
+                return
+        super().mousePressEvent(event)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, runtime: CoreRuntime) -> None:
         super().__init__()
@@ -49,8 +61,10 @@ class MainWindow(QMainWindow):
         self._modes = QStackedWidget(root)
         layout.addWidget(self._modes, 1)
 
+        self._shell_shown = False
         self._wizard = WizardView(runtime, self._bridge, self)
         self._wizard.finished.connect(self._show_shell)
+        self._wizard.cancelled.connect(self._show_shell)
         self._modes.addWidget(self._wizard)
 
         shell = QWidget(self)
@@ -59,10 +73,10 @@ class MainWindow(QMainWindow):
         shell_layout.setSpacing(0)
         self._pages = QStackedWidget(shell)
         self._live = LiveView(runtime, self._bridge, shell)
-        self._live.recalibrate_requested.connect(lambda: self.start_wizard(0))
+        self._live.recalibrate_requested.connect(lambda: self.start_wizard(1))
         self._camera_tab = CameraTab(runtime, self._bridge, shell)
-        self._camera_tab.recalibrate_requested.connect(lambda: self.start_wizard(2))
-        self._camera_tab.recheck_requested.connect(lambda: self.start_wizard(3))
+        self._camera_tab.recalibrate_requested.connect(lambda: self.start_wizard(1))
+        self._camera_tab.recheck_requested.connect(lambda: self.start_wizard(2))
         self._log_tab = LogTab(self._bridge, shell)
         self._log_tab.export_pgn.connect(self._live.export_pgn)
         self._settings_tab = SettingsTab(runtime, shell)
@@ -87,7 +101,7 @@ class MainWindow(QMainWindow):
     # ---- building blocks -------------------------------------------------
 
     def _build_header(self) -> QWidget:
-        header = QWidget(self)
+        header = _DragHandle(self)  # the app header also drags the window
         header.setObjectName("header")
         layout = QHBoxLayout(header)
         layout.setContentsMargins(16, 12, 16, 12)
@@ -108,10 +122,13 @@ class MainWindow(QMainWindow):
     # ---- modes -------------------------------------------------------------
 
     def start_wizard(self, step: int) -> None:
+        # Once the app has been shown, the wizard is a detour: it can always be left.
+        cancellable = self._shell_shown
         self._modes.setCurrentIndex(0)
-        self._wizard.start(step)
+        self._wizard.start(step, cancellable=cancellable)
 
     def _show_shell(self) -> None:
+        self._shell_shown = True
         self._modes.setCurrentIndex(1)
         self._nav.select(0)
         self._pages.setCurrentIndex(0)
@@ -146,6 +163,12 @@ class MainWindow(QMainWindow):
             height = win.height or 860
             x = win.x or 0
             y = win.y or 0
+        if available is not None:
+            # Never taller than the work area, never off-screen (a saved geometry from another
+            # monitor layout would otherwise leave the title bar unreachable).
+            height = min(height, available.height() - 8)
+            x = min(max(x, available.left()), available.right() - width + 1)
+            y = min(max(y, available.top()), available.bottom() - 120)
         self.setGeometry(x, y, width, height)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt override

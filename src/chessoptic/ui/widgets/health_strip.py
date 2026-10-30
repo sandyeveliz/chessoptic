@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFontMetrics, QResizeEvent
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QWidget
 
 from chessoptic.core.events import ComponentHealth, HealthLevel, HealthState
 from chessoptic.ui.theme import TOKENS
@@ -19,27 +21,38 @@ class HealthCard(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("card")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(2)
-        top = QHBoxLayout()
-        top.setSpacing(6)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 5, 8, 5)
+        layout.setSpacing(5)
         self._dot = QLabel("•", self)
         self._label = QLabel("", self)
-        self._label.setStyleSheet("font-weight: 600; font-size: 12px;")
-        top.addWidget(self._dot)
-        top.addWidget(self._label)
-        top.addStretch(1)
-        layout.addLayout(top)
+        self._label.setStyleSheet("font-weight: 600; font-size: 11px;")
+        self._full_detail = ""
         self._detail = QLabel("", self)
         self._detail.setObjectName("muted")
         self._detail.setStyleSheet("font-size: 11px;")
-        layout.addWidget(self._detail)
+        self._detail.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        layout.addWidget(self._dot)
+        layout.addWidget(self._label)
+        layout.addWidget(self._detail, 1)
 
     def set_component(self, component: ComponentHealth) -> None:
         self._label.setText(component.label)
-        self._detail.setText(component.detail)
+        self._full_detail = component.detail
+        self._elide()
+        self.setToolTip(f"{component.label}: {component.detail}")
         self._dot.setStyleSheet(f"color: {LEVEL_COLORS[component.level]}; font-size: 14px;")
+
+    def _elide(self) -> None:
+        metrics = QFontMetrics(self._detail.font())
+        width = max(0, self._detail.width() - 2)
+        self._detail.setText(
+            metrics.elidedText(self._full_detail, Qt.TextElideMode.ElideRight, width)
+        )
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - Qt override
+        super().resizeEvent(event)
+        self._elide()
 
 
 class HealthStrip(QWidget):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+import chess
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
@@ -21,7 +22,7 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 from chessoptic.board.occupancy import Occupancy
 from chessoptic.ui.theme import TOKENS
 from chessoptic.vision.calibration import Corner
-from chessoptic.vision.squares import square_to_cell
+from chessoptic.vision.squares import cell_to_square, square_to_cell
 
 HANDLE_RADIUS = 9.0
 GRAB_DISTANCE = 22.0
@@ -34,9 +35,19 @@ HIGHLIGHT_COLORS: dict[str, str] = {
 }
 
 
+def piece_letters(board: chess.Board) -> dict[int, str]:
+    """Overlay letters for a position: K Q R B N, nothing for pawns."""
+    return {
+        sq: piece.symbol().upper()
+        for sq, piece in board.piece_map().items()
+        if piece.piece_type != chess.PAWN
+    }
+
+
 class CameraView(QWidget):
     corners_changed = Signal(object)  # tuple of 4 (x, y) in image pixels
     corner_drag_finished = Signal(object)
+    square_clicked = Signal(int)  # rectified mode, when clickable
 
     def __init__(self, mode: str = "rectified", parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -49,12 +60,22 @@ class CameraView(QWidget):
         self._a1 = "bottom-left"
         self._corners: list[Corner] | None = None
         self._editable = False
+        self._clickable = False
+        self._expected: tuple[int, ...] | None = None
+        self._pieces: dict[int, str] = {}
         self._guide = False
         self._drag_index: int | None = None
         self._caption = ""
         self._placeholder = "Sin imagen"
+        self._fit = False  # True: take whatever height the layout gives (no height-for-width)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setMinimumHeight(120)
+
+    def set_fit(self, fit: bool) -> None:
+        """Fill the space the layout gives instead of forcing a square: the image is
+        letterboxed, so the rest of the page never scrolls because of the camera."""
+        self._fit = fit
+        self.updateGeometry()
 
     # ---- state -----------------------------------------------------------
 
@@ -86,6 +107,23 @@ class CameraView(QWidget):
         self._corners = list(corners) if corners else None
         self.update()
 
+    def set_clickable(self, clickable: bool) -> None:
+        """Rectified mode: clicking a square emits `square_clicked`."""
+        self._clickable = clickable
+        self.setCursor(
+            Qt.CursorShape.PointingHandCursor if clickable else Qt.CursorShape.ArrowCursor
+        )
+
+    def set_pieces(self, pieces: Mapping[int, str]) -> None:
+        """Letter per square (K Q R B N; pawns blank) from the position the game tracks."""
+        self._pieces = dict(pieces)
+        self.update()
+
+    def set_expected(self, grid: tuple[int, ...] | None) -> None:
+        """What the position says each square holds; readings that disagree are drawn hollow."""
+        self._expected = grid
+        self.update()
+
     def set_editable(self, editable: bool) -> None:
         self._editable = editable
         self.setCursor(Qt.CursorShape.CrossCursor if editable else Qt.CursorShape.ArrowCursor)
@@ -110,7 +148,7 @@ class CameraView(QWidget):
         return int(width * 9 / 16)
 
     def hasHeightForWidth(self) -> bool:  # noqa: N802 - Qt override
-        return True
+        return not self._fit
 
     # ---- geometry helpers --------------------------------------------------
 
@@ -125,7 +163,8 @@ class CameraView(QWidget):
             return QRectF((w - side) / 2, (h - side) / 2, side, side)
         scale = min(w / image.width(), h / image.height())
         tw, th = image.width() * scale, image.height() * scale
-        return QRectF((w - tw) / 2, (h - th) / 2, tw, th)
+        top = 0.0 if self._fit else (h - th) / 2  # fit mode: hug the content above, no gap
+        return QRectF((w - tw) / 2, top, tw, th)
 
     def _to_widget(self, point: Corner, target: QRectF) -> QPointF:
         image = self._image()
@@ -187,16 +226,35 @@ class CameraView(QWidget):
                 painter.drawRect(rect)
             if self._grid is not None:
                 value = self._grid[square]
+                expected = self._expected[square] if self._expected is not None else None
+                doubtful = expected is not None and expected != value
                 if value != Occupancy.EMPTY:
                     radius = cell * 0.3
                     center = rect.center()
-                    if value == Occupancy.WHITE:
-                        painter.setBrush(QColor("#FFFFFF"))
-                        painter.setPen(QPen(QColor(TOKENS.line_strong), 1.5))
+                    fill = QColor("#FFFFFF" if value == Occupancy.WHITE else TOKENS.ink)
+                    edge = QColor(TOKENS.line_strong if value == Occupancy.WHITE else TOKENS.ink)
+                    if doubtful:
+                        # The camera sees something the position denies (a shadow, a glare):
+                        # hollow dashed ring instead of a solid piece.
+                        painter.setBrush(Qt.BrushStyle.NoBrush)
+                        painter.setPen(QPen(edge, 1.5, Qt.PenStyle.DashLine))
+                        painter.drawEllipse(center, radius * 0.8, radius * 0.8)
                     else:
-                        painter.setBrush(QColor(TOKENS.ink))
-                        painter.setPen(QPen(QColor(TOKENS.ink), 1.5))
-                    painter.drawEllipse(center, radius, radius)
+                        painter.setBrush(fill)
+                        painter.setPen(QPen(edge, 1.5))
+                        painter.drawEllipse(center, radius, radius)
+                        letter = self._pieces.get(square, "")
+                        if letter:
+                            painter.setFont(QFont(TOKENS.font_mono, max(7, int(cell * 0.3))))
+                            painter.setPen(
+                                QColor(TOKENS.ink if value == Occupancy.WHITE else "#FFFFFF")
+                            )
+                            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, letter)
+                elif doubtful:
+                    # Expected a piece, see nothing: faint ring where it should be.
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.setPen(QPen(QColor(TOKENS.warn), 1.5, Qt.PenStyle.DashLine))
+                    painter.drawEllipse(rect.center(), cell * 0.24, cell * 0.24)
                 if self._confidence is not None and self._confidence[square] < 0.25:
                     painter.setPen(QPen(QColor(TOKENS.err), 2))
                     painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -273,7 +331,24 @@ class CameraView(QWidget):
 
     # ---- corner dragging ------------------------------------------------------
 
+    def square_at(self, pos: QPointF) -> int | None:
+        """Square under a widget position (rectified mode), or None outside the board."""
+        target = self._target_rect()
+        cell = target.width() / 8
+        if cell <= 0 or not target.contains(pos):
+            return None
+        col = int((pos.x() - target.left()) / cell)
+        row = int((pos.y() - target.top()) / cell)
+        if not (0 <= col < 8 and 0 <= row < 8):
+            return None
+        return cell_to_square((col, row), self._a1)
+
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt override
+        if self._clickable and self._mode == "rectified":
+            square = self.square_at(event.position())
+            if square is not None:
+                self.square_clicked.emit(square)
+            return
         if not (self._editable and self._corners and self._mode == "raw"):
             return
         target = self._target_rect()

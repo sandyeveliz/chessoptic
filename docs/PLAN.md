@@ -270,15 +270,15 @@ Especificación detallada de pantallas, tokens y datos: [`docs/UI.md`](UI.md). M
 - [x] Asistente de setup de 7 pasos con chequeo de detección y prueba de jugada (H1).
 - [x] BoardModel con inferencia por jugadas legales (ambos bandos) y verificación de posición inicial (H2).
 - [x] UI "En vivo" con cámara, overlay, semáforo de salud, log de jugadas detectadas (H1 + H2).
-- [ ] Grabaciones reales del tablero y `chessoptic replay` (después del POC, ver IMPLEMENTATION §2.6).
+- [ ] Grabaciones reales del tablero y `chessoptic replay` (después del POC, ver IMPLEMENTATION §2.6). Mientras tanto, los frames problemáticos se guardan solos en `<datos>/debug/` (`save_error_frames`).
 
 **Aceptación**: partida completa grabada reconstruida sin errores; en vivo ≤1 falsa detección cada 50 jugadas con luz normal.
 
-### Etapa 2 — Modo local
-- [ ] `LocalEngineAdapter` con Stockfish (nivel configurable).
-- [ ] Flujo completo de estados de partida en la UI (turno azul, reproducir jugada del rival, verificación, fin).
+### Etapa 2 — Modo local (hito H3)
+- [x] `StockfishAdapter` sobre `UciEngine` (cualquier motor UCI; nivel 1–8 y color en Ajustes).
+- [x] Flujo completo de estados de partida en la UI (turno azul, reproducir jugada del rival, verificación, fin). Sin reloj (modo `FreePlay`).
 
-**Aceptación**: jugar una partida completa contra Stockfish usando solo piezas físicas.
+**Aceptación**: jugar una partida completa contra Stockfish usando solo piezas físicas. ✅ Cumplida el 2026-10-30 (v0.1.0).
 
 ### Etapa 3 — Lichess
 - [ ] `LichessAdapter` con Board API: eventos, partida en curso, enviar jugadas, jugada rival, relojes, fin.

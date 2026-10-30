@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import threading
+import time
 from collections.abc import Callable
 
+import chess
+
 from chessoptic.adapters import create_adapter
+from chessoptic.board.occupancy import Grid
 from chessoptic.capture.webcam import CameraInfo, WebcamSource, list_cameras
+from chessoptic.core import debug
 from chessoptic.core.bus import EventBus
 from chessoptic.core.config import (
     AppConfig,
@@ -23,7 +29,12 @@ from chessoptic.core.events import (
     CameraStatus,
     ClassifierTrained,
     DriverState,
+    FrameEvent,
+    LogEntry,
+    MoveTestProgress,
+    OccupancyFrame,
     Phase,
+    PositionMismatch,
     SetupCheckReport,
 )
 from chessoptic.core.health import HealthAggregator
@@ -37,6 +48,16 @@ from chessoptic.vision.pipeline import VisionPipeline
 
 log = logging.getLogger(__name__)
 
+DUMP_COOLDOWN_S = 20.0
+
+
+def _now() -> str:
+    return time.strftime("%H:%M:%S")
+
+
+def _now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S")
+
 
 class CoreRuntime:
     def __init__(self, config: AppConfig) -> None:
@@ -49,8 +70,95 @@ class CoreRuntime:
         self.camera: CameraInfo | None = None
         self.profile: CameraProfile | None = None
         self.session: GameSession | None = None
+        self._dumped: dict[str, tuple[tuple[str, str], float]] = {}
+        self._last_frame: FrameEvent | None = None
+        self._last_occupancy: OccupancyFrame | None = None
         self.bus.subscribe(DriverState, self._on_driver_state)
+        self.bus.subscribe(FrameEvent, self._remember_frame)
+        self.bus.subscribe(OccupancyFrame, self._remember_occupancy)
+        self.bus.subscribe(MoveTestProgress, self._on_move_test_progress)
+        self.bus.subscribe(PositionMismatch, self._on_position_mismatch)
         self.pipeline.start()
+
+    # ---- learning ----------------------------------------------------------
+
+    def _on_position_accepted(self, expected: Grid) -> None:
+        self.pipeline.mark_reference(expected)
+        self._maybe_dump_phantoms(expected)
+
+    def correct_square(self, square: int, expected: Grid) -> bool:
+        """The user says the camera is wrong on `square`; teach it the expected reading."""
+        ok = self.pipeline.refine(expected, {square}, alpha=0.5)
+        if ok:
+            name = chess.square_name(square)
+            self.bus.publish(LogEntry(_now(), "event", f"{name} corregida a mano"))
+        return ok
+
+    def save_classifier(self) -> None:
+        """Persist a refined classifier into the camera profile."""
+        classifier = self.pipeline.classifier
+        if self.profile is None or classifier is None or not self.pipeline.classifier_dirty:
+            return
+        self.profile = dataclasses.replace(
+            self.profile, classifier=classifier.to_dict(), updated=_now_iso()
+        )
+        save_profile(self.profile)
+        self.pipeline.classifier_dirty = False
+
+    # ---- diagnostics -------------------------------------------------------
+
+    def _maybe_dump_phantoms(self, expected: Grid) -> None:
+        """Keep a frame when the camera sees pieces on squares that should be empty."""
+        occ = self._last_occupancy
+        if occ is None:
+            return
+        phantoms = [sq for sq in chess.SQUARES if expected[sq] == 0 and occ.grid[sq] != 0]
+        if phantoms:
+            self._dump("phantom", {"squares": phantoms, "expected": list(expected)})
+
+    def _remember_frame(self, event: FrameEvent) -> None:
+        self._last_frame = event
+
+    def _remember_occupancy(self, event: OccupancyFrame) -> None:
+        self._last_occupancy = event
+
+    def _on_move_test_progress(self, event: MoveTestProgress) -> None:
+        if event.mismatched:
+            self._dump(
+                "movetest", {"stage": str(event.stage), "mismatched": list(event.mismatched)}
+            )
+
+    def _on_position_mismatch(self, event: PositionMismatch) -> None:
+        issues = [
+            {"square": i.square, "expected": i.expected, "seen": i.seen} for i in event.issues
+        ]
+        self._dump("mismatch", {"issues": issues})
+
+    def _dump(self, tag: str, info: dict[str, object]) -> None:
+        """One dump per distinct situation, at most one every few seconds per tag."""
+        if not self.config.save_error_frames:
+            return
+        key = (tag, repr(sorted(info.items())))
+        now = time.monotonic()
+        last = self._dumped.get(tag)
+        if last is not None and last[0] == key and now - last[1] < DUMP_COOLDOWN_S:
+            return
+        self._dumped[tag] = (key, now)
+        frame, occ = self._last_frame, self._last_occupancy
+        calibration = self.pipeline.calibration
+        details: dict[str, object] = {
+            **info,
+            "a1": calibration.a1_corner if calibration is not None else None,
+            "grid": list(occ.grid) if occ is not None else None,
+            "confidence": [round(c, 3) for c in occ.confidence] if occ is not None else None,
+            "camera": self.camera.key if self.camera is not None else None,
+        }
+        debug.dump(
+            tag,
+            frame.raw if frame is not None else None,
+            frame.rectified if frame is not None else None,
+            details,
+        )
 
     # ---- cameras ---------------------------------------------------------
 
@@ -66,7 +174,17 @@ class CoreRuntime:
 
         threading.Thread(target=worker, name="list-cameras", daemon=True).start()
 
+    def camera_is_open(self, info: CameraInfo | None = None) -> bool:
+        """True when the pipeline is reading from `info` (or from any camera) right now."""
+        source = self.pipeline.source
+        if not isinstance(source, WebcamSource) or not source.healthy:
+            return False
+        return info is None or (self.camera is not None and self.camera.key == info.key)
+
     def open_camera(self, info: CameraInfo) -> bool:
+        if self.camera_is_open(info):
+            return True  # already streaming from it; reopening would only drop frames
+        self.pipeline.set_source(None)  # a device can't be opened twice (DirectShow)
         try:
             source = WebcamSource(info)
         except OSError as exc:
@@ -167,8 +285,9 @@ class CoreRuntime:
             self.bus,
             adapter,
             get_mode("free"),
-            mismatch_grace_ms=2000,
+            mismatch_grace_ms=3000,
             promotion_default=self.config.promotion_default,
+            on_accept=self._on_position_accepted,
         )
         self.session.start()
         return self.session
@@ -198,6 +317,7 @@ class CoreRuntime:
     # ---- lifecycle -------------------------------------------------------
 
     def shutdown(self) -> None:
+        self.save_classifier()
         if self.session is not None:
             self.session.stop()
         self.pipeline.stop()

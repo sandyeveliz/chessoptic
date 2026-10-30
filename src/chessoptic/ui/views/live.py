@@ -5,19 +5,20 @@ from __future__ import annotations
 import chess
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QFrame,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
+from chessoptic.board.occupancy import Grid, from_board
 from chessoptic.core.events import (
     AdapterError,
     CalibrationChanged,
+    DetectionPhase,
+    DetectionState,
     DriverState,
     DriverStateName,
     GameInfo,
@@ -30,7 +31,7 @@ from chessoptic.core.events import (
 from chessoptic.core.runtime import CoreRuntime
 from chessoptic.game.session import PendingOpponentChanged
 from chessoptic.ui.bridge import CoreBridge, UiFrames
-from chessoptic.ui.widgets.camera_view import CameraView
+from chessoptic.ui.widgets.camera_view import CameraView, piece_letters
 from chessoptic.ui.widgets.health_strip import HealthStrip
 from chessoptic.ui.widgets.moves_list import MovesList
 from chessoptic.ui.widgets.state_block import StateBlock
@@ -52,17 +53,12 @@ class LiveView(QWidget):
         self._runtime = runtime
         self._state: DriverState | None = None
         self._info: GameInfo | None = None
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        scroll = QScrollArea(self)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        outer.addWidget(scroll)
-        page = QWidget(self)
-        scroll.setWidget(page)
+        # Everything fits the panel: the camera takes whatever height is left, so the state
+        # block, the last moves and the actions never scroll out of sight.
+        page = self
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(16, 10, 16, 12)
+        layout.setSpacing(10)
 
         self._strip = HealthStrip(page)
         layout.addWidget(self._strip)
@@ -86,12 +82,16 @@ class LiveView(QWidget):
         layout.addLayout(header)
 
         self._camera = CameraView("rectified", page)
-        layout.addWidget(self._camera)
+        self._camera.set_clickable(True)
+        self._camera.square_clicked.connect(self._correct_square)
+        self._camera.set_fit(True)
+        self._camera.setMinimumHeight(160)
+        layout.addWidget(self._camera, 1)
 
         moves_label = QLabel("ÚLTIMAS JUGADAS", page)
         moves_label.setObjectName("sectionLabel")
         layout.addWidget(moves_label)
-        self._moves = MovesList(4, page)
+        self._moves = MovesList(3, page)
         layout.addWidget(self._moves)
 
         actions = QHBoxLayout()
@@ -104,7 +104,6 @@ class LiveView(QWidget):
         actions.addWidget(export)
         actions.addStretch(1)
         layout.addLayout(actions)
-        layout.addStretch(1)
 
         bridge.health_changed.connect(self.set_health)
         bridge.frames_ready.connect(self._on_frames)
@@ -114,6 +113,7 @@ class LiveView(QWidget):
         bridge.game_info.connect(self._on_info)
         bridge.pending_changed.connect(self._on_pending)
         bridge.position_mismatch.connect(self._on_mismatch)
+        bridge.detection_state.connect(self._on_detection)
         bridge.adapter_error.connect(self._on_error)
         bridge.calibration_changed.connect(self._on_calibration)
 
@@ -134,6 +134,18 @@ class LiveView(QWidget):
     def _promotion(self, piece: int) -> None:
         if self._runtime.session:
             self._runtime.session.set_promotion(piece)
+
+    def _position(self) -> chess.Board:
+        if self._state is not None and self._state.phase == Phase.IN_GAME and self._info:
+            return chess.Board(self._info.fen)
+        return chess.Board()
+
+    def _expected_grid(self) -> Grid:
+        return from_board(self._position())
+
+    def _correct_square(self, square: int) -> None:
+        if self._runtime.correct_square(square, self._expected_grid()):
+            self._camera.set_caption(f"{chess.square_name(square)} corregida: aprendido")
 
     def export_pgn(self) -> None:
         session = self._runtime.session
@@ -163,12 +175,16 @@ class LiveView(QWidget):
 
     def _on_state(self, state: DriverState) -> None:
         self._state = state
+        self._camera.set_expected(self._expected_grid())
+        self._camera.set_pieces(piece_letters(self._position()))
         self._block.set_state(state)
         if state.state not in KEEP_HIGHLIGHTS:
             self._camera.set_highlights(self._last_move_highlights())
 
     def _on_info(self, info: GameInfo) -> None:
         self._info = info
+        self._camera.set_expected(self._expected_grid())
+        self._camera.set_pieces(piece_letters(self._position()))
         self._block.set_info(info)
         self._moves.set_info(info)
         if self._state and self._state.phase == Phase.IN_GAME:
@@ -176,10 +192,22 @@ class LiveView(QWidget):
 
     def _on_pending(self, event: PendingOpponentChanged) -> None:
         self._block.set_pending(event.pending)
+        self._moves.set_pending(event.pending)
         if event.pending is not None:
             self._camera.set_highlights(
                 {event.pending.from_square: "origin", event.pending.to_square: "destination"}
             )
+
+    def _on_detection(self, detection: DetectionState) -> None:
+        self._block.set_detection(detection)
+        if detection.phase in (DetectionPhase.LIFTED, DetectionPhase.SEEN) and detection.squares:
+            highlights = {sq: "origin" for sq in detection.squares}
+            self._camera.set_highlights(highlights)
+        elif detection.phase == DetectionPhase.UNEXPLAINED and detection.squares:
+            self._camera.set_highlights({sq: "error" for sq in detection.squares})
+        elif detection.phase in (DetectionPhase.WAITING, DetectionPhase.ACCEPTED):
+            if self._state is not None and self._state.state not in KEEP_HIGHLIGHTS:
+                self._camera.set_highlights(self._last_move_highlights())
 
     def _on_mismatch(self, event: PositionMismatch) -> None:
         self._camera.set_highlights({issue.square: "error" for issue in event.issues})

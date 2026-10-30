@@ -9,9 +9,19 @@ from __future__ import annotations
 
 import chess
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from chessoptic.core.events import (
+    DetectionPhase,
+    DetectionState,
     DriverState,
     DriverStateName,
     GameInfo,
@@ -48,6 +58,8 @@ class StateBlock(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("stateBlock")
+        # Keep the card at its natural height: the camera view is what shrinks, never the buttons.
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         self._variant = ""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
@@ -69,21 +81,33 @@ class StateBlock(QFrame):
         self._detail = QLabel("", self)
         self._detail.setWordWrap(True)
         self._detail.setStyleSheet("font-size: 12px;")
+        self._detection_label = QLabel("", self)
+        self._detection_label.setWordWrap(True)
+        self._detection_label.hide()
         layout.addWidget(self._label)
         layout.addWidget(self._title)
         layout.addWidget(self._big)
         layout.addWidget(self._detail)
+        layout.addWidget(self._detection_label)
 
         self._buttons = QWidget(self)
         self._buttons_layout = QGridLayout(self._buttons)
         self._buttons_layout.setContentsMargins(0, 4, 0, 0)
         self._buttons_layout.setSpacing(8)
+        self._pool: list[QPushButton] = []
+        self._slots: list[object | None] = [None] * 4
+        for _ in range(4):  # the promotion card needs four
+            button = QPushButton("", self._buttons)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.hide()
+            self._pool.append(button)
         layout.addWidget(self._buttons)
 
         self._state: DriverState | None = None
         self._info: GameInfo | None = None
         self._pending: PendingOpponentMove | None = None
         self._both_sides = True
+        self._detection: DetectionState | None = None
         self.refresh()
 
     # ---- inputs ----------------------------------------------------------
@@ -94,12 +118,40 @@ class StateBlock(QFrame):
 
     def set_info(self, info: GameInfo) -> None:
         self._info = info
-        self._both_sides = info.my_color is None
+        self._both_sides = info.both_sides
         self.refresh()
 
     def set_pending(self, pending: PendingOpponentMove | None) -> None:
         self._pending = pending
         self.refresh()
+
+    def set_detection(self, detection: DetectionState) -> None:
+        """Second line of the card: what the camera is doing right now (docs/STATES.md)."""
+        self._detection = detection
+        self._render_detection()
+
+    def _render_detection(self) -> None:
+        detection = self._detection
+        if detection is None or detection.phase == DetectionPhase.IDLE or not detection.detail:
+            self._detection_label.hide()
+            return
+        light = self._variant == "my_turn"
+        colors = {
+            DetectionPhase.WAITING: "rgba(255,255,255,0.85)" if light else TOKENS.muted,
+            DetectionPhase.HAND: "#FFFFFF" if light else TOKENS.turn,
+            DetectionPhase.READING: "#FFFFFF" if light else TOKENS.turn,
+            DetectionPhase.LIFTED: "#FFFFFF" if light else TOKENS.turn,
+            DetectionPhase.SEEN: "#FFFFFF" if light else TOKENS.ok,
+            DetectionPhase.ACCEPTED: "#FFFFFF" if light else TOKENS.ok,
+            DetectionPhase.UNEXPLAINED: "#FFE2A8" if light else TOKENS.warn,
+            DetectionPhase.MISMATCH: TOKENS.err,
+            DetectionPhase.THINKING: TOKENS.muted,
+        }
+        color = colors.get(detection.phase, TOKENS.muted)
+        self._detection_label.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {color};")
+        self._detection_label.setText(f"• {detection.detail}")
+        self._detection_label.show()
+        self.updateGeometry()
 
     # ---- rendering -------------------------------------------------------
 
@@ -120,22 +172,35 @@ class StateBlock(QFrame):
             f"color: {color};"
         )
         self._detail.setStyleSheet(f"font-size: 12px; color: {muted};")
+        self._render_detection()
 
     def _set_buttons(self, specs: list[tuple[str, object, bool]]) -> None:
-        while self._buttons_layout.count():
-            item = self._buttons_layout.takeAt(0)
-            widget = item.widget() if item is not None else None
-            if widget is not None:
-                widget.deleteLater()
+        """Reuse a fixed pool of buttons: no widget churn, so the card's height is always right."""
         columns = 2 if len(specs) > 2 else max(1, len(specs))
-        for index, (text, slot, primary) in enumerate(specs):
-            button = QPushButton(text, self._buttons)
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            if primary:
-                button.setProperty("primary", "true")
+        for index, button in enumerate(self._pool):
+            self._buttons_layout.removeWidget(button)
+            if index >= len(specs):
+                button.hide()
+                previous = self._slots[index]
+                if previous is not None:
+                    button.clicked.disconnect(previous)
+                    self._slots[index] = None
+                continue
+            text, slot, primary = specs[index]
+            button.setText(text)
+            button.setProperty("primary", "true" if primary else "false")
+            style = button.style()
+            style.unpolish(button)
+            style.polish(button)
+            previous = self._slots[index]
+            if previous is not None:
+                button.clicked.disconnect(previous)
             button.clicked.connect(slot)
+            self._slots[index] = slot
             self._buttons_layout.addWidget(button, index // columns, index % columns)
+            button.show()
         self._buttons.setVisible(bool(specs))
+        self.updateGeometry()
 
     def refresh(self) -> None:
         state = self._state
@@ -198,9 +263,7 @@ class StateBlock(QFrame):
             self._title.setText("")
             self._big.setText(pending.san if pending else detail)
             self._big.show()
-            self._detail.setText(
-                (pending.human_text if pending else "") + " Esperando que la cámara vea la jugada."
-            )
+            self._detail.setText(pending.human_text if pending else "")
             self._set_buttons([("Terminar", self.end_game.emit, False)])
         elif name == DriverStateName.PROMOTION:
             self._apply_variant("replay")
@@ -221,10 +284,16 @@ class StateBlock(QFrame):
             self._apply_variant("mismatch")
             self._label.setText("⚠ LA POSICIÓN NO COINCIDE")
             self._title.setText("Revisá las casillas marcadas")
+            pending_text = (
+                f" Jugada del rival pendiente: {self._pending.san}." if self._pending else ""
+            )
             self._detail.setText(
-                f"Casillas: {detail}. Corregí las piezas y la jugada se verifica sola."
-                if detail
-                else "Corregí las piezas marcadas y la jugada se verifica sola."
+                (
+                    f"Casillas: {detail}. Corregí las piezas y la jugada se verifica sola."
+                    if detail
+                    else "Corregí las piezas marcadas y la jugada se verifica sola."
+                )
+                + pending_text
             )
             self._set_buttons([("Resincronizar", self.resync.emit, True)])
         elif name == DriverStateName.LINK_LOST:
@@ -239,8 +308,9 @@ class StateBlock(QFrame):
             result = info.result if info and info.result else ""
             self._title.setText(result or "Fin de partida")
             moves = len(info.moves) if info else 0
+            last = f" Última: {info.moves[-1].san}." if info and info.moves else ""
             self._detail.setText(
-                f"{detail} · {moves} jugadas. Reordená el tablero para la próxima."
+                f"{detail} · {moves} jugadas.{last} Reordená el tablero para la próxima."
             )
             self._set_buttons(
                 [

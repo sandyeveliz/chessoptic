@@ -8,7 +8,7 @@ import os
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, get_type_hints
 
 import platformdirs
 
@@ -54,7 +54,8 @@ class AppConfig:
     save_error_frames: bool = True
     sound_on_errors: bool = False
     stockfish_path: str | None = None
-    stockfish_level: int = 4
+    stockfish_level: int = 4  # 1-8, see adapters/local/stockfish.py
+    my_color: str = "white"  # colour against a local engine
     promotion_default: str = "ask"
     window: WindowConfig = field(default_factory=WindowConfig)
 
@@ -64,12 +65,15 @@ def _from_dict[T](cls: type[T], data: Any) -> T:
     if not isinstance(data, dict):
         return cls()
     kwargs: dict[str, Any] = {}
+    # ``from __future__ import annotations`` leaves ``f.type`` as a string; resolve it.
+    hints = get_type_hints(cls)
     for f in fields(cls):  # type: ignore[arg-type]
         if f.name not in data:
             continue
         value = data[f.name]
-        if is_dataclass(f.type) and isinstance(f.type, type):
-            kwargs[f.name] = _from_dict(f.type, value)
+        ftype = hints.get(f.name, f.type)
+        if is_dataclass(ftype) and isinstance(ftype, type):
+            kwargs[f.name] = _from_dict(ftype, value)
         else:
             kwargs[f.name] = value
     return cls(**kwargs)

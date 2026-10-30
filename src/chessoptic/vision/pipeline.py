@@ -7,6 +7,7 @@ import threading
 import time
 from collections import deque
 
+from chessoptic.board.occupancy import Grid
 from chessoptic.capture.source import FrameSource, Image
 from chessoptic.capture.webcam import WebcamSource
 from chessoptic.core.bus import EventBus
@@ -18,7 +19,7 @@ from chessoptic.core.events import (
     StabilityEvent,
 )
 from chessoptic.vision.calibration import Calibration
-from chessoptic.vision.features import extract_features
+from chessoptic.vision.features import Features, extract_features
 from chessoptic.vision.occupancy import OccupancyClassifier
 from chessoptic.vision.stability import StabilityDetector
 
@@ -46,6 +47,11 @@ class VisionPipeline:
         self._classifier: OccupancyClassifier | None = None
         self._recent: deque[Image] = deque(maxlen=RECENT_FRAMES)
         self._last_stable: Image | None = None
+        self._last_features: Features | None = None
+        self._last_grid: tuple[int, ...] | None = None
+        self._reference: tuple[Features, tuple[int, ...]] | None = None
+        self._mark_pending = False
+        self.classifier_dirty = False  # refined since it was last saved
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
 
@@ -74,6 +80,33 @@ class VisionPipeline:
     def set_classifier(self, classifier: OccupancyClassifier | None) -> None:
         with self._lock:
             self._classifier = classifier
+            self._reference = None
+            self._mark_pending = classifier is not None
+
+    def mark_reference(self, expected: Grid | None = None, alpha: float = 0.1) -> None:
+        """The board now shows an accepted position: later frames report changes against it.
+
+        With `expected` (the position the core trusts) the classifier also learns from this
+        frame a little, so this camera's shadows and reflections stop surprising it.
+        """
+        with self._lock:
+            if self._last_features is not None and self._last_grid is not None:
+                self._reference = (self._last_features, self._last_grid)
+                self._mark_pending = False
+            else:
+                self._mark_pending = True
+        if expected is not None:
+            self.refine(expected, alpha=alpha)
+
+    def refine(self, labels: Grid, squares: set[int] | None = None, alpha: float = 0.1) -> bool:
+        """Nudge the classifier towards `labels` using the latest frame (all squares, or some)."""
+        with self._lock:
+            classifier, features = self._classifier, self._last_features
+        if classifier is None or not classifier.trained or features is None:
+            return False
+        classifier.refine(features, labels, alpha=alpha, squares=squares)
+        self.classifier_dirty = True
+        return True
 
     @property
     def classifier(self) -> OccupancyClassifier | None:
@@ -108,6 +141,28 @@ class VisionPipeline:
             return None
         self.set_classifier(classifier)
         return classifier
+
+    def _update_reference(
+        self,
+        classifier: OccupancyClassifier,
+        features: Features,
+        grid: tuple[int, ...],
+        stable: bool,
+    ) -> tuple[bool, ...]:
+        with self._lock:
+            self._last_features, self._last_grid = features, grid
+            if self._mark_pending or (self._reference is None and stable):
+                self._reference = (features, grid)
+                self._mark_pending = False
+            reference = self._reference
+        if reference is None:
+            return ()
+        changed = classifier.change_flags(features, reference[0])
+        # Same labels, still: only light drifted; follow it so old shadows don't linger.
+        if stable and grid == reference[1] and not any(changed):
+            with self._lock:
+                self._reference = (features, grid)
+        return changed
 
     # ---- thread ----------------------------------------------------------
 
@@ -169,15 +224,17 @@ class VisionPipeline:
                 )
                 if classifier is not None and classifier.trained and rectified is not None:
                     try:
-                        grid, confidence = classifier.predict(
-                            extract_features(rectified, calibration.a1_corner)  # type: ignore[union-attr]
-                        )
+                        features = extract_features(rectified, calibration.a1_corner)  # type: ignore[union-attr]
+                        grid, confidence = classifier.predict(features)
                     except Exception:
                         log.exception("occupancy prediction failed")
                     else:
+                        changed = self._update_reference(
+                            classifier, features, grid, stability.stable
+                        )
                         self._bus.publish(
                             OccupancyFrame(
-                                grid, confidence, stability.stable, stability.motion, now
+                                grid, confidence, stability.stable, stability.motion, now, changed
                             )
                         )
 
