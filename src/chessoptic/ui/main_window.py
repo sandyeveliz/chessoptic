@@ -16,12 +16,14 @@ from PySide6.QtWidgets import (
 from chessoptic.core.config import save_config
 from chessoptic.core.events import HealthLevel, HealthState
 from chessoptic.core.runtime import CoreRuntime
+from chessoptic.game.notation import set_display_language
 from chessoptic.ui.bridge import CoreBridge
 from chessoptic.ui.views.camera_tab import CameraTab
 from chessoptic.ui.views.live import LiveView
 from chessoptic.ui.views.log_tab import LogTab
 from chessoptic.ui.views.settings_tab import SettingsTab
 from chessoptic.ui.views.wizard import WizardView
+from chessoptic.ui.voice import MoveVoice
 from chessoptic.ui.widgets.health_pill import HealthPill
 from chessoptic.ui.widgets.nav_bar import NavBar
 
@@ -47,6 +49,10 @@ class MainWindow(QMainWindow):
         self._runtime = runtime
         self._config = runtime.config
         self._bridge = CoreBridge(runtime.bus, self)
+        set_display_language(self._config.notation_language)
+        self._voice = MoveVoice(self)
+        self._voice.configure(self._config.notation_language, self._config.voice_name)
+        self._bridge.opponent_move.connect(self._on_opponent_move)
         self.setWindowTitle("ChessOptic")
         self.setMinimumWidth(MIN_WIDTH)
 
@@ -79,7 +85,7 @@ class MainWindow(QMainWindow):
         self._camera_tab.recheck_requested.connect(lambda: self.start_wizard(2))
         self._log_tab = LogTab(self._bridge, shell)
         self._log_tab.export_pgn.connect(self._live.export_pgn)
-        self._settings_tab = SettingsTab(runtime, shell)
+        self._settings_tab = SettingsTab(runtime, self._voice, shell)
         self._settings_tab.always_on_top_changed.connect(self.set_always_on_top)
         self._settings_tab.provider_changed.connect(lambda name: runtime.start_session(name))
         self._pages.addWidget(self._live)
@@ -140,6 +146,10 @@ class MainWindow(QMainWindow):
 
     def set_pill(self, level: HealthLevel, text: str) -> None:
         self._pill.set_state(level, text)
+
+    def _on_opponent_move(self, san: str) -> None:
+        if self._config.speak_opponent_moves:
+            self._voice.say_move(san)
 
     def set_always_on_top(self, enabled: bool) -> None:
         was_visible = self.isVisible()
