@@ -49,8 +49,10 @@ class MainWindow(QMainWindow):
         self._modes = QStackedWidget(root)
         layout.addWidget(self._modes, 1)
 
+        self._shell_shown = False
         self._wizard = WizardView(runtime, self._bridge, self)
         self._wizard.finished.connect(self._show_shell)
+        self._wizard.cancelled.connect(self._show_shell)
         self._modes.addWidget(self._wizard)
 
         shell = QWidget(self)
@@ -59,7 +61,7 @@ class MainWindow(QMainWindow):
         shell_layout.setSpacing(0)
         self._pages = QStackedWidget(shell)
         self._live = LiveView(runtime, self._bridge, shell)
-        self._live.recalibrate_requested.connect(lambda: self.start_wizard(0))
+        self._live.recalibrate_requested.connect(lambda: self.start_wizard(1))
         self._camera_tab = CameraTab(runtime, self._bridge, shell)
         self._camera_tab.recalibrate_requested.connect(lambda: self.start_wizard(1))
         self._camera_tab.recheck_requested.connect(lambda: self.start_wizard(2))
@@ -108,10 +110,13 @@ class MainWindow(QMainWindow):
     # ---- modes -------------------------------------------------------------
 
     def start_wizard(self, step: int) -> None:
+        # Once the app has been shown, the wizard is a detour: it can always be left.
+        cancellable = self._shell_shown
         self._modes.setCurrentIndex(0)
-        self._wizard.start(step)
+        self._wizard.start(step, cancellable=cancellable)
 
     def _show_shell(self) -> None:
+        self._shell_shown = True
         self._modes.setCurrentIndex(1)
         self._nav.select(0)
         self._pages.setCurrentIndex(0)

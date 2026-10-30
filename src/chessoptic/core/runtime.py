@@ -174,7 +174,17 @@ class CoreRuntime:
 
         threading.Thread(target=worker, name="list-cameras", daemon=True).start()
 
+    def camera_is_open(self, info: CameraInfo | None = None) -> bool:
+        """True when the pipeline is reading from `info` (or from any camera) right now."""
+        source = self.pipeline.source
+        if not isinstance(source, WebcamSource) or not source.healthy:
+            return False
+        return info is None or (self.camera is not None and self.camera.key == info.key)
+
     def open_camera(self, info: CameraInfo) -> bool:
+        if self.camera_is_open(info):
+            return True  # already streaming from it; reopening would only drop frames
+        self.pipeline.set_source(None)  # a device can't be opened twice (DirectShow)
         try:
             source = WebcamSource(info)
         except OSError as exc:
@@ -275,7 +285,7 @@ class CoreRuntime:
             self.bus,
             adapter,
             get_mode("free"),
-            mismatch_grace_ms=2000,
+            mismatch_grace_ms=3000,
             promotion_default=self.config.promotion_default,
             on_accept=self._on_position_accepted,
         )

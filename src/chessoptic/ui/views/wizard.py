@@ -35,7 +35,7 @@ from chessoptic.core.events import (
 from chessoptic.core.runtime import CoreRuntime
 from chessoptic.ui.bridge import CoreBridge, UiFrames
 from chessoptic.ui.theme import TOKENS
-from chessoptic.ui.widgets.camera_view import CameraView
+from chessoptic.ui.widgets.camera_view import CameraView, piece_letters
 from chessoptic.ui.widgets.stepper import Stepper
 from chessoptic.vision.calibration import (
     A1_CORNERS,
@@ -102,6 +102,7 @@ def square_name(square: int) -> str:
 
 class WizardView(QWidget):
     finished = Signal()
+    cancelled = Signal()  # leave the wizard, keep the current setup
     _camera_opened = Signal(object, bool)
 
     def __init__(
@@ -123,8 +124,15 @@ class WizardView(QWidget):
 
         self._stepper = Stepper(len(STEP_TITLES), self)
         root.addWidget(self._stepper)
+        step_row = QHBoxLayout()
         self._step_label = _muted("", self)
-        root.addWidget(self._step_label)
+        step_row.addWidget(self._step_label, 1)
+        self._back = _button("Volver a la app", self)
+        self._back.setToolTip("Salir del asistente sin cambiar nada")
+        self._back.clicked.connect(self.cancelled.emit)
+        self._back.hide()
+        step_row.addWidget(self._back)
+        root.addLayout(step_row)
 
         self._stack = QStackedWidget(self)
         root.addWidget(self._stack, 1)
@@ -164,11 +172,16 @@ class WizardView(QWidget):
 
     # ---- navigation ---------------------------------------------------------
 
-    def start(self, step: int = 0) -> None:
+    def start(self, step: int = 0, cancellable: bool = False) -> None:
+        self._back.setVisible(cancellable)
         self.go_to(step)
         if step == 0:
-            self._runtime.list_cameras_async()
-            self._camera_hint.setText("Buscando cámaras…")
+            if self._runtime.camera_is_open() and self._runtime.cameras:
+                # Coming back from the app: keep streaming, just show the list we already have.
+                self._on_cameras(CamerasListed(tuple(self._runtime.cameras)))
+            else:
+                self._runtime.list_cameras_async()
+                self._camera_hint.setText("Buscando cámaras…")
 
     def go_to(self, index: int) -> None:
         previous = self._stack.currentIndex()
@@ -205,10 +218,6 @@ class WizardView(QWidget):
         layout.addWidget(self._camera_preview)
         self._camera_hint = _muted("", page)
         layout.addWidget(self._camera_hint)
-        self._use_saved = _button("Usar la calibración guardada", page)
-        self._use_saved.clicked.connect(lambda: self.go_to(2))
-        self._use_saved.hide()
-        layout.addWidget(self._use_saved)
         self._use_camera = _button("Usar esta cámara y calibrar", page, primary=True)
         self._use_camera.setEnabled(False)
         self._use_camera.clicked.connect(lambda: self.go_to(1))
@@ -244,6 +253,9 @@ class WizardView(QWidget):
         if index < 0 or index >= len(self._cameras):
             return
         info = self._cameras[index]
+        if self._runtime.camera_is_open(info):
+            self._camera_opened_ui(info, True)
+            return
         self._use_camera.setEnabled(False)
         self._camera_hint.setText(f"Abriendo {info.name}…")
 
@@ -259,10 +271,12 @@ class WizardView(QWidget):
             self._camera_hint.setText(f"No se pudo abrir {info.name}.")
             return
         self._use_camera.setEnabled(True)
-        has_profile = self._runtime.has_profile(info)
-        self._use_saved.setVisible(has_profile)
+        # Always calibrate and learn the pieces again: a stale classifier (other light, other
+        # orientation) is worse than a minute of setup. Saved corners are pre-filled anyway.
         self._camera_hint.setText(
-            "Hay una calibración guardada para esta cámara." if has_profile else "Cámara lista."
+            "Cámara lista. Las esquinas guardadas se precargan en el paso siguiente."
+            if self._runtime.has_profile(info)
+            else "Cámara lista."
         )
 
     # ---- step 2: framing + corners ---------------------------------------------
@@ -378,6 +392,7 @@ class WizardView(QWidget):
         layout.addLayout(counters)
         self._initial_view = CameraView("rectified", page)
         self._initial_view.set_expected(STARTPOS)
+        self._initial_view.set_pieces(piece_letters(chess.Board()))
         self._initial_view.set_clickable(True)
         self._initial_view.square_clicked.connect(self._correct_initial_square)
         layout.addWidget(self._initial_view)
@@ -463,6 +478,7 @@ class WizardView(QWidget):
         )
         self._check_view = CameraView("rectified", page)
         self._check_view.set_expected(STARTPOS)
+        self._check_view.set_pieces(piece_letters(chess.Board()))
         self._check_view.set_clickable(True)
         self._check_view.square_clicked.connect(self._correct_initial_square)
         layout.addWidget(self._check_view)

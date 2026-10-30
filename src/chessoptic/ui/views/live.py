@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from chessoptic.board.occupancy import STARTPOS, Grid, from_board
+from chessoptic.board.occupancy import Grid, from_board
 from chessoptic.core.events import (
     AdapterError,
     CalibrationChanged,
@@ -29,7 +29,7 @@ from chessoptic.core.events import (
 from chessoptic.core.runtime import CoreRuntime
 from chessoptic.game.session import PendingOpponentChanged
 from chessoptic.ui.bridge import CoreBridge, UiFrames
-from chessoptic.ui.widgets.camera_view import CameraView
+from chessoptic.ui.widgets.camera_view import CameraView, piece_letters
 from chessoptic.ui.widgets.health_strip import HealthStrip
 from chessoptic.ui.widgets.moves_list import MovesList
 from chessoptic.ui.widgets.state_block import StateBlock
@@ -132,10 +132,13 @@ class LiveView(QWidget):
         if self._runtime.session:
             self._runtime.session.set_promotion(piece)
 
-    def _expected_grid(self) -> Grid:
+    def _position(self) -> chess.Board:
         if self._state is not None and self._state.phase == Phase.IN_GAME and self._info:
-            return from_board(chess.Board(self._info.fen))
-        return STARTPOS
+            return chess.Board(self._info.fen)
+        return chess.Board()
+
+    def _expected_grid(self) -> Grid:
+        return from_board(self._position())
 
     def _correct_square(self, square: int) -> None:
         if self._runtime.correct_square(square, self._expected_grid()):
@@ -170,6 +173,7 @@ class LiveView(QWidget):
     def _on_state(self, state: DriverState) -> None:
         self._state = state
         self._camera.set_expected(self._expected_grid())
+        self._camera.set_pieces(piece_letters(self._position()))
         self._block.set_state(state)
         if state.state not in KEEP_HIGHLIGHTS:
             self._camera.set_highlights(self._last_move_highlights())
@@ -177,6 +181,7 @@ class LiveView(QWidget):
     def _on_info(self, info: GameInfo) -> None:
         self._info = info
         self._camera.set_expected(self._expected_grid())
+        self._camera.set_pieces(piece_letters(self._position()))
         self._block.set_info(info)
         self._moves.set_info(info)
         if self._state and self._state.phase == Phase.IN_GAME:

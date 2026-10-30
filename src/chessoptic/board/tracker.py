@@ -77,6 +77,9 @@ class BoardTracker:
 
     def on_occupancy(self, frame: OccupancyFrame) -> list[TrackerEvent]:
         if not frame.stable:
+            # Hands still moving: whatever looked wrong may be a move in progress.
+            self._mismatch_since = None
+            self._candidate = None
             return []
         if self._target is not None:
             return self._verify(frame)

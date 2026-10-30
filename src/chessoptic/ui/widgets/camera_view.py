@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+import chess
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
@@ -34,6 +35,15 @@ HIGHLIGHT_COLORS: dict[str, str] = {
 }
 
 
+def piece_letters(board: chess.Board) -> dict[int, str]:
+    """Overlay letters for a position: K Q R B N, nothing for pawns."""
+    return {
+        sq: piece.symbol().upper()
+        for sq, piece in board.piece_map().items()
+        if piece.piece_type != chess.PAWN
+    }
+
+
 class CameraView(QWidget):
     corners_changed = Signal(object)  # tuple of 4 (x, y) in image pixels
     corner_drag_finished = Signal(object)
@@ -52,6 +62,7 @@ class CameraView(QWidget):
         self._editable = False
         self._clickable = False
         self._expected: tuple[int, ...] | None = None
+        self._pieces: dict[int, str] = {}
         self._guide = False
         self._drag_index: int | None = None
         self._caption = ""
@@ -102,6 +113,11 @@ class CameraView(QWidget):
         self.setCursor(
             Qt.CursorShape.PointingHandCursor if clickable else Qt.CursorShape.ArrowCursor
         )
+
+    def set_pieces(self, pieces: Mapping[int, str]) -> None:
+        """Letter per square (K Q R B N; pawns blank) from the position the game tracks."""
+        self._pieces = dict(pieces)
+        self.update()
 
     def set_expected(self, grid: tuple[int, ...] | None) -> None:
         """What the position says each square holds; readings that disagree are drawn hollow."""
@@ -227,6 +243,13 @@ class CameraView(QWidget):
                         painter.setBrush(fill)
                         painter.setPen(QPen(edge, 1.5))
                         painter.drawEllipse(center, radius, radius)
+                        letter = self._pieces.get(square, "")
+                        if letter:
+                            painter.setFont(QFont(TOKENS.font_mono, max(7, int(cell * 0.3))))
+                            painter.setPen(
+                                QColor(TOKENS.ink if value == Occupancy.WHITE else "#FFFFFF")
+                            )
+                            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, letter)
                 elif doubtful:
                     # Expected a piece, see nothing: faint ring where it should be.
                     painter.setBrush(Qt.BrushStyle.NoBrush)
