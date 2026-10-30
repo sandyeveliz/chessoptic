@@ -94,6 +94,13 @@ class StateBlock(QFrame):
         self._buttons_layout = QGridLayout(self._buttons)
         self._buttons_layout.setContentsMargins(0, 4, 0, 0)
         self._buttons_layout.setSpacing(8)
+        self._pool: list[QPushButton] = []
+        self._slots: list[object | None] = [None] * 4
+        for _ in range(4):  # the promotion card needs four
+            button = QPushButton("", self._buttons)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.hide()
+            self._pool.append(button)
         layout.addWidget(self._buttons)
 
         self._state: DriverState | None = None
@@ -144,6 +151,7 @@ class StateBlock(QFrame):
         self._detection_label.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {color};")
         self._detection_label.setText(f"• {detection.detail}")
         self._detection_label.show()
+        self.updateGeometry()
 
     # ---- rendering -------------------------------------------------------
 
@@ -167,20 +175,32 @@ class StateBlock(QFrame):
         self._render_detection()
 
     def _set_buttons(self, specs: list[tuple[str, object, bool]]) -> None:
-        while self._buttons_layout.count():
-            item = self._buttons_layout.takeAt(0)
-            widget = item.widget() if item is not None else None
-            if widget is not None:
-                widget.deleteLater()
+        """Reuse a fixed pool of buttons: no widget churn, so the card's height is always right."""
         columns = 2 if len(specs) > 2 else max(1, len(specs))
-        for index, (text, slot, primary) in enumerate(specs):
-            button = QPushButton(text, self._buttons)
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            if primary:
-                button.setProperty("primary", "true")
+        for index, button in enumerate(self._pool):
+            self._buttons_layout.removeWidget(button)
+            if index >= len(specs):
+                button.hide()
+                previous = self._slots[index]
+                if previous is not None:
+                    button.clicked.disconnect(previous)
+                    self._slots[index] = None
+                continue
+            text, slot, primary = specs[index]
+            button.setText(text)
+            button.setProperty("primary", "true" if primary else "false")
+            style = button.style()
+            style.unpolish(button)
+            style.polish(button)
+            previous = self._slots[index]
+            if previous is not None:
+                button.clicked.disconnect(previous)
             button.clicked.connect(slot)
+            self._slots[index] = slot
             self._buttons_layout.addWidget(button, index // columns, index % columns)
+            button.show()
         self._buttons.setVisible(bool(specs))
+        self.updateGeometry()
 
     def refresh(self) -> None:
         state = self._state
