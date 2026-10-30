@@ -24,3 +24,4 @@ tests/fixtures/**/*.png
 # Local agent skills (installed per machine)
 .agents/
 .claude/skills/
+skills-lock.json

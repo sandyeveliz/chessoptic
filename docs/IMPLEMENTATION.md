@@ -46,7 +46,7 @@ Estas respuestas reemplazan a las preguntas abiertas de la primera versión de e
 
 ## 1. Hitos del MVP
 
-> **Estado al 2026-10-29**: H0, H1, H2 y H3 implementados (PRs #2, #3, #4 y #5, uno por hito, cada uno sobre el anterior). Falta probar H1–H3 con la cámara y el tablero reales del autor y ajustar umbrales (ver §10.2). Documentos nuevos: `docs/SETUP.md`, `docs/STATES.md`, `docs/EXTENDING.md`.
+> **Estado al 2026-10-30 (v0.1.0)**: H0–H3 implementados y probados con la cámara y el tablero reales del autor: partida completa contra Stockfish usando solo piezas físicas. Lo aprendido en esas pruebas (sombras, bordes del encuadre, estados de detección) está en `docs/STATES.md` y en el código del modelo de tablero. Lo que sigue: `docs/ROADMAP.md`.
 
 | Hito | Qué se puede hacer al terminarlo | Etapa del PLAN |
 |---|---|---|
