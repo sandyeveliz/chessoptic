@@ -18,6 +18,7 @@ import chess
 
 from chessoptic.adapters.base import OutputAdapter
 from chessoptic.board.model import BoardModel
+from chessoptic.board.occupancy import Grid
 from chessoptic.board.tracker import BoardTracker
 from chessoptic.core.bus import EventBus
 from chessoptic.core.events import (
@@ -78,7 +79,7 @@ class GameSession:
         mode: GameMode,
         mismatch_grace_ms: int = 2000,
         promotion_default: str = "ask",
-        on_accept: Callable[[], None] | None = None,
+        on_accept: Callable[[Grid], None] | None = None,
     ) -> None:
         self._bus = bus
         self._adapter = adapter

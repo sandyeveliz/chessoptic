@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from chessoptic.board.occupancy import STARTPOS, Grid, from_board
 from chessoptic.core.events import (
     AdapterError,
     CalibrationChanged,
@@ -79,6 +80,8 @@ class LiveView(QWidget):
         layout.addLayout(header)
 
         self._camera = CameraView("rectified", page)
+        self._camera.set_clickable(True)
+        self._camera.square_clicked.connect(self._correct_square)
         self._camera.set_fit(True)
         self._camera.setMinimumHeight(160)
         layout.addWidget(self._camera, 1)
@@ -129,6 +132,15 @@ class LiveView(QWidget):
         if self._runtime.session:
             self._runtime.session.set_promotion(piece)
 
+    def _expected_grid(self) -> Grid:
+        if self._state is not None and self._state.phase == Phase.IN_GAME and self._info:
+            return from_board(chess.Board(self._info.fen))
+        return STARTPOS
+
+    def _correct_square(self, square: int) -> None:
+        if self._runtime.correct_square(square, self._expected_grid()):
+            self._camera.set_caption(f"{chess.square_name(square)} corregida: aprendido")
+
     def export_pgn(self) -> None:
         session = self._runtime.session
         path = session.export_pgn() if session else None
@@ -157,12 +169,14 @@ class LiveView(QWidget):
 
     def _on_state(self, state: DriverState) -> None:
         self._state = state
+        self._camera.set_expected(self._expected_grid())
         self._block.set_state(state)
         if state.state not in KEEP_HIGHLIGHTS:
             self._camera.set_highlights(self._last_move_highlights())
 
     def _on_info(self, info: GameInfo) -> None:
         self._info = info
+        self._camera.set_expected(self._expected_grid())
         self._block.set_info(info)
         self._moves.set_info(info)
         if self._state and self._state.phase == Phase.IN_GAME:

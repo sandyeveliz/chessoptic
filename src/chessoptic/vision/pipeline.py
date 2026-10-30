@@ -7,6 +7,7 @@ import threading
 import time
 from collections import deque
 
+from chessoptic.board.occupancy import Grid
 from chessoptic.capture.source import FrameSource, Image
 from chessoptic.capture.webcam import WebcamSource
 from chessoptic.core.bus import EventBus
@@ -50,6 +51,7 @@ class VisionPipeline:
         self._last_grid: tuple[int, ...] | None = None
         self._reference: tuple[Features, tuple[int, ...]] | None = None
         self._mark_pending = False
+        self.classifier_dirty = False  # refined since it was last saved
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
 
@@ -81,14 +83,30 @@ class VisionPipeline:
             self._reference = None
             self._mark_pending = classifier is not None
 
-    def mark_reference(self) -> None:
-        """The board now shows an accepted position: later frames report changes against it."""
+    def mark_reference(self, expected: Grid | None = None, alpha: float = 0.1) -> None:
+        """The board now shows an accepted position: later frames report changes against it.
+
+        With `expected` (the position the core trusts) the classifier also learns from this
+        frame a little, so this camera's shadows and reflections stop surprising it.
+        """
         with self._lock:
             if self._last_features is not None and self._last_grid is not None:
                 self._reference = (self._last_features, self._last_grid)
                 self._mark_pending = False
             else:
                 self._mark_pending = True
+        if expected is not None:
+            self.refine(expected, alpha=alpha)
+
+    def refine(self, labels: Grid, squares: set[int] | None = None, alpha: float = 0.1) -> bool:
+        """Nudge the classifier towards `labels` using the latest frame (all squares, or some)."""
+        with self._lock:
+            classifier, features = self._classifier, self._last_features
+        if classifier is None or not classifier.trained or features is None:
+            return False
+        classifier.refine(features, labels, alpha=alpha, squares=squares)
+        self.classifier_dirty = True
+        return True
 
     @property
     def classifier(self) -> OccupancyClassifier | None:

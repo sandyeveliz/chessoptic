@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from chessoptic.board.occupancy import STARTPOS
 from chessoptic.capture.webcam import CameraInfo
 from chessoptic.core.events import (
     CamerasListed,
@@ -376,7 +377,17 @@ class WizardView(QWidget):
             counters.addWidget(label)
         layout.addLayout(counters)
         self._initial_view = CameraView("rectified", page)
+        self._initial_view.set_expected(STARTPOS)
+        self._initial_view.set_clickable(True)
+        self._initial_view.square_clicked.connect(self._correct_initial_square)
         layout.addWidget(self._initial_view)
+        layout.addWidget(
+            _muted(
+                "¿Una casilla mal leída? Tocala: ChessOptic aprende que ahí va lo que "
+                "corresponde en la posición inicial.",
+                page,
+            )
+        )
         row = QHBoxLayout()
         back = _button("Esquinas", page)
         back.clicked.connect(lambda: self.go_to(1))
@@ -402,6 +413,12 @@ class WizardView(QWidget):
         self._white_count.setText("Blancas —")
         self._black_count.setText("Negras —")
         self._runtime.arm_initial_training()
+
+    def _correct_initial_square(self, square: int) -> None:
+        if self._runtime.correct_square(square, STARTPOS):
+            self._initial_hint.setText(
+                f"{square_name(square)} corregida: aprendido. Revisá que ahora se lea bien."
+            )
 
     def _on_trained(self, event: ClassifierTrained) -> None:
         if event.trained and self._stack.currentIndex() == 2:
@@ -445,6 +462,9 @@ class WizardView(QWidget):
             )
         )
         self._check_view = CameraView("rectified", page)
+        self._check_view.set_expected(STARTPOS)
+        self._check_view.set_clickable(True)
+        self._check_view.square_clicked.connect(self._correct_initial_square)
         layout.addWidget(self._check_view)
         answer = QHBoxLayout()
         no = _button("No coincide", page)

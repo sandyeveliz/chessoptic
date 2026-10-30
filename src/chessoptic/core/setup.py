@@ -93,7 +93,7 @@ class SetupFlow:
         self._move_stage = MoveTestStage.WAITING_MOVE
         self._move_mismatch = None
         self._move_reference = STARTPOS
-        self._pipeline.mark_reference()
+        self._pipeline.mark_reference(STARTPOS)
         self._bus.publish(
             MoveTestProgress(self._move_stage, "Mové el peón de e2 a e4, soltalo y sacá la mano.")
         )
@@ -132,7 +132,7 @@ class SetupFlow:
             self._move_stage = MoveTestStage.WAITING_BACK
             self._move_reference = event.grid
             self._move_mismatch = None
-            self._pipeline.mark_reference()
+            self._pipeline.mark_reference(EXPECTED_E2E4)
             self._bus.publish(
                 MoveTestProgress(
                     self._move_stage, "e2–e4 detectada. Ahora volvé el peón a e2.", latency
@@ -140,6 +140,7 @@ class SetupFlow:
             )
         elif self._move_stage == MoveTestStage.WAITING_BACK and not wrong:
             self._move_stage = MoveTestStage.DONE
+            self._pipeline.mark_reference(STARTPOS)
             self._bus.publish(
                 MoveTestProgress(self._move_stage, "Vuelta a e2 detectada. Todo listo.", latency)
             )

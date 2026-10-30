@@ -33,9 +33,10 @@ def dump(
     try:
         folder = debug_dir()
         folder.mkdir(parents=True, exist_ok=True)
-        if len(list(folder.glob("*.json"))) >= MAX_DUMPS:
-            log.warning("debug folder full (%d dumps); not saving more", MAX_DUMPS)
-            return None
+        existing = sorted(folder.glob("*.json"))
+        for old in existing[: max(0, len(existing) - MAX_DUMPS + 1)]:
+            for stale in folder.glob(old.stem + "*"):
+                stale.unlink(missing_ok=True)
         stamp = time.strftime("%Y%m%d_%H%M%S") + f"_{int(time.time() * 1000) % 1000:03d}"
         base = folder / f"{tag}_{stamp}"
         if raw is not None:

@@ -88,11 +88,17 @@ class OccupancyClassifier:
                     self.centroids[parity][cls] = np.mean(rows, axis=0)
         self.trained = all(len(self.centroids[p]) == len(CLASSES) for p in PARITIES)
 
-    def refine(self, features: Features, grid: Grid, alpha: float = 0.1) -> None:
+    def refine(
+        self,
+        features: Features,
+        grid: Grid,
+        alpha: float = 0.1,
+        squares: set[int] | None = None,
+    ) -> None:
         """Move centroids towards a confirmed position (online refinement)."""
         if not self.trained:
             return
-        for sq in chess.SQUARES:
+        for sq in chess.SQUARES if squares is None else sorted(squares):
             parity, cls = _parity(sq), grid[sq]
             centroid = self.centroids[parity].get(cls)
             if centroid is not None:

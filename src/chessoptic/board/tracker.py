@@ -44,7 +44,7 @@ class BoardTracker:
         model: BoardModel,
         mismatch_grace_ms: int = 2000,
         confirm_frames: int = 2,
-        on_accept: Callable[[], None] | None = None,
+        on_accept: Callable[[Grid], None] | None = None,
     ) -> None:
         self.model = model
         self.mismatch_grace_ms = mismatch_grace_ms
@@ -83,8 +83,9 @@ class BoardTracker:
         return self._detect(frame)
 
     def notify_accept(self) -> None:
+        """The board shows the model's position: let the vision layer re-anchor and learn."""
         if self.on_accept is not None:
-            self.on_accept()
+            self.on_accept(self.model.expected_occupancy())
 
     def _detect(self, frame: OccupancyFrame) -> list[TrackerEvent]:
         resolution = self.model.resolve(frame.grid, frame.changed_squares)
