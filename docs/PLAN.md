@@ -268,8 +268,8 @@ Especificación detallada de pantallas, tokens y datos: [`docs/UI.md`](UI.md). M
 - [x] Calibración manual de 4 esquinas + orientación (4 posiciones de a1), persistida por cámara.
 - [x] Clasificador de ocupación autoentrenado y estabilidad/mano.
 - [x] Asistente de setup de 7 pasos con chequeo de detección y prueba de jugada (H1).
-- [ ] BoardModel con inferencia por jugadas legales (ambos bandos) y verificación de posición inicial. (H2; la verificación de posición inicial ya está.)
-- [ ] UI "En vivo" con cámara, overlay, semáforo de salud, log de jugadas detectadas. (Cámara, overlay y semáforo listos en H1; log en H2.)
+- [x] BoardModel con inferencia por jugadas legales (ambos bandos) y verificación de posición inicial (H2).
+- [x] UI "En vivo" con cámara, overlay, semáforo de salud, log de jugadas detectadas (H1 + H2).
 - [ ] Grabaciones reales del tablero y `chessoptic replay` (después del POC, ver IMPLEMENTATION §2.6).
 
 **Aceptación**: partida completa grabada reconstruida sin errores; en vivo ≤1 falsa detección cada 50 jugadas con luz normal.

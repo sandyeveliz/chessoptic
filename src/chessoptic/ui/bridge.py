@@ -11,18 +11,24 @@ from PySide6.QtGui import QImage
 
 from chessoptic.core.bus import EventBus
 from chessoptic.core.events import (
+    AdapterError,
     CalibrationChanged,
     CamerasListed,
     CameraStatus,
     ClassifierTrained,
+    DriverState,
     FrameEvent,
+    GameInfo,
     HealthState,
     InitialPositionCheck,
+    LogEntry,
     MoveTestProgress,
     OccupancyFrame,
+    PositionMismatch,
     SetupCheckReport,
     StabilityEvent,
 )
+from chessoptic.game.session import PendingOpponentChanged
 
 
 @dataclass(frozen=True)
@@ -50,6 +56,12 @@ class CoreBridge(QObject):
     initial_check = Signal(object)
     setup_check = Signal(object)
     move_test = Signal(object)
+    driver_state = Signal(object)
+    game_info = Signal(object)
+    pending_changed = Signal(object)
+    log_entry = Signal(object)
+    adapter_error = Signal(object)
+    position_mismatch = Signal(object)
 
     def __init__(self, bus: EventBus, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -64,6 +76,12 @@ class CoreBridge(QObject):
         bus.subscribe(InitialPositionCheck, self.initial_check.emit)
         bus.subscribe(SetupCheckReport, self.setup_check.emit)
         bus.subscribe(MoveTestProgress, self.move_test.emit)
+        bus.subscribe(DriverState, self.driver_state.emit)
+        bus.subscribe(GameInfo, self.game_info.emit)
+        bus.subscribe(PendingOpponentChanged, self.pending_changed.emit)
+        bus.subscribe(LogEntry, self.log_entry.emit)
+        bus.subscribe(AdapterError, self.adapter_error.emit)
+        bus.subscribe(PositionMismatch, self.position_mismatch.emit)
 
     def _on_frame(self, event: FrameEvent) -> None:
         rectified = to_qimage(event.rectified) if event.rectified is not None else None

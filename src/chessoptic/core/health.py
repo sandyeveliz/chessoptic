@@ -11,6 +11,8 @@ from chessoptic.core.events import (
     ComponentHealth,
     HealthLevel,
     HealthState,
+    LinkState,
+    LinkStatus,
     OccupancyFrame,
 )
 
@@ -31,6 +33,7 @@ class HealthAggregator:
         bus.subscribe(CalibrationChanged, self._on_calibration)
         bus.subscribe(ClassifierTrained, self._on_trained)
         bus.subscribe(OccupancyFrame, self._on_occupancy)
+        bus.subscribe(LinkStatus, self._on_link)
 
     # ---- inputs ----------------------------------------------------------
 
@@ -61,6 +64,24 @@ class HealthAggregator:
         if event.stable:
             self._confidence = event.mean_confidence
         self._emit()
+
+    def _on_link(self, event: LinkStatus) -> None:
+        level = {
+            LinkState.CONNECTED: HealthLevel.OK,
+            LinkState.ANNOUNCING: HealthLevel.WARN,
+            LinkState.LOST: HealthLevel.ERR,
+            LinkState.INACTIVE: HealthLevel.IDLE,
+        }[event.state]
+        detail = (
+            event.client
+            if event.state == LinkState.CONNECTED
+            else {
+                LinkState.ANNOUNCING: "anunciando…",
+                LinkState.LOST: "perdido",
+                LinkState.INACTIVE: "inactivo",
+            }.get(event.state, "")
+        )
+        self.set_link(level, detail)
 
     def set_link(self, level: HealthLevel, detail: str) -> None:
         self._link = ComponentHealth(level, "Enlace", detail)

@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
+    import chess
+
     from chessoptic.board.occupancy import Grid
     from chessoptic.capture.webcam import CameraInfo
     from chessoptic.vision.calibration import Calibration
@@ -162,3 +164,171 @@ class MoveTestProgress:
     stage: MoveTestStage
     detail: str
     latency_ms: float | None = None
+
+
+# ---------------------------------------------------------------- board events (tracker → session)
+
+
+@dataclass(frozen=True)
+class SquareIssue:
+    square: int
+    expected: int  # Occupancy value
+    seen: int
+
+
+@dataclass(frozen=True)
+class MoveDetected:
+    move: chess.Move
+    san: str
+    fen_before: str
+    fen_after: str
+
+
+@dataclass(frozen=True)
+class MoveAmbiguous:
+    candidates: tuple[chess.Move, ...]
+
+
+@dataclass(frozen=True)
+class PositionMismatch:
+    issues: tuple[SquareIssue, ...]
+
+
+@dataclass(frozen=True)
+class PositionMatched:
+    fen: str
+
+
+# ---------------------------------------------------------------- adapter events (→ session)
+
+
+class LinkState(StrEnum):
+    INACTIVE = "inactive"
+    ANNOUNCING = "announcing"
+    CONNECTED = "connected"
+    LOST = "lost"
+
+
+@dataclass(frozen=True)
+class LinkStatus:
+    state: LinkState
+    client: str
+    detail: str = ""
+
+
+@dataclass(frozen=True)
+class GameStarted:
+    game_id: str
+    my_color: bool | None  # chess.WHITE / chess.BLACK; None = both sides (tracking)
+    platform: str
+    initial_fen: str
+
+
+@dataclass(frozen=True)
+class OpponentMove:
+    move: chess.Move
+    san: str
+
+
+@dataclass(frozen=True)
+class MoveAccepted:
+    move: chess.Move
+
+
+@dataclass(frozen=True)
+class MoveRejected:
+    move: chess.Move
+    reason: str
+
+
+@dataclass(frozen=True)
+class ClockUpdate:
+    white_ms: int | None
+    black_ms: int | None
+
+
+@dataclass(frozen=True)
+class GameOver:
+    result: str  # "1-0", "0-1", "1/2-1/2", "*"
+    reason: str
+
+
+@dataclass(frozen=True)
+class AdapterError:
+    message: str
+    recoverable: bool = True
+
+
+# ---------------------------------------------------------------- session snapshots (→ UI)
+
+
+class Phase(StrEnum):
+    STANDBY = "standby"
+    IN_GAME = "in_game"
+
+
+class DriverStateName(StrEnum):
+    STARTING = "starting"
+    UNCALIBRATED = "uncalibrated"
+    VERIFYING_BOARD = "verifying_board"
+    READY = "ready"
+    PAUSED = "paused"
+    MY_TURN = "my_turn"
+    MOVING = "moving"
+    OPPONENT_TURN = "opponent_turn"
+    REPLAY = "replay"
+    VERIFYING = "verifying"
+    PROMOTION = "promotion"
+    MISMATCH = "mismatch"
+    LINK_LOST = "link_lost"
+    GAME_OVER = "game_over"
+
+
+@dataclass(frozen=True)
+class DriverState:
+    phase: Phase
+    state: DriverStateName
+    detail: str = ""
+
+
+@dataclass(frozen=True)
+class MoveRecord:
+    number: int  # full-move number
+    color: bool  # chess.WHITE / chess.BLACK
+    san: str
+    uci: str
+    source: str  # "detected" | "opponent"
+    wall_time: str  # HH:MM:SS
+
+
+@dataclass(frozen=True)
+class GameInfo:
+    my_color: bool | None
+    platform: str
+    moves: tuple[MoveRecord, ...]
+    result: str | None
+    turn: bool  # side to move
+    fen: str
+    white_ms: int | None = None
+    black_ms: int | None = None
+    last_sent: str | None = None  # SAN of my last move, once accepted
+    last_opponent: str | None = None  # SAN of the opponent's last move
+
+
+@dataclass(frozen=True)
+class PendingOpponentMove:
+    san: str
+    uci: str
+    piece_name: str
+    from_square: int
+    to_square: int
+    special: str | None  # "castle" | "en_passant" | "promotion" | None
+    human_text: str
+
+
+@dataclass(frozen=True)
+class LogEntry:
+    wall_time: str
+    kind: str  # "move" | "event" | "error"
+    text: str
+    frame_path: str | None = None

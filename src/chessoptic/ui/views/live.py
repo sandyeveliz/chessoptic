@@ -1,4 +1,4 @@
-"""'En vivo': health strip, status block, rectified camera with overlay, recent events."""
+"""'En vivo': health strip, state block, rectified camera with overlay, last moves."""
 
 from __future__ import annotations
 
@@ -8,24 +8,50 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
-from chessoptic.core.events import HealthState, InitialPositionCheck, OccupancyFrame
+from chessoptic.core.events import (
+    AdapterError,
+    CalibrationChanged,
+    DriverState,
+    DriverStateName,
+    GameInfo,
+    HealthState,
+    InitialPositionCheck,
+    OccupancyFrame,
+    Phase,
+    PositionMismatch,
+)
+from chessoptic.core.runtime import CoreRuntime
+from chessoptic.game.session import PendingOpponentChanged
 from chessoptic.ui.bridge import CoreBridge, UiFrames
-from chessoptic.ui.theme import TOKENS
 from chessoptic.ui.widgets.camera_view import CameraView
 from chessoptic.ui.widgets.health_strip import HealthStrip
+from chessoptic.ui.widgets.moves_list import MovesList
+from chessoptic.ui.widgets.state_block import StateBlock
+
+KEEP_HIGHLIGHTS = (
+    DriverStateName.MISMATCH,
+    DriverStateName.REPLAY,
+    DriverStateName.VERIFYING_BOARD,
+)
 
 
 class LiveView(QWidget):
     recalibrate_requested = Signal()
 
-    def __init__(self, bridge: CoreBridge, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, runtime: CoreRuntime, bridge: CoreBridge, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
+        self._runtime = runtime
+        self._state: DriverState | None = None
+        self._info: GameInfo | None = None
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea(self)
@@ -41,19 +67,13 @@ class LiveView(QWidget):
         self._strip = HealthStrip(page)
         layout.addWidget(self._strip)
 
-        self._status = QFrame(page)
-        self._status.setObjectName("card")
-        status_layout = QVBoxLayout(self._status)
-        self._status_title = QLabel("Listo para seguir la partida", self._status)
-        self._status_title.setStyleSheet(
-            f"font-family: '{TOKENS.font_display}'; font-size: 15px; font-weight: 600;"
-        )
-        self._status_detail = QLabel("", self._status)
-        self._status_detail.setObjectName("muted")
-        self._status_detail.setWordWrap(True)
-        status_layout.addWidget(self._status_title)
-        status_layout.addWidget(self._status_detail)
-        layout.addWidget(self._status)
+        self._block = StateBlock(page)
+        self._block.new_game.connect(self._new_game)
+        self._block.end_game.connect(self._end_game)
+        self._block.resync.connect(self._resync)
+        self._block.promotion_chosen.connect(self._promotion)
+        self._block.export_pgn.connect(self.export_pgn)
+        layout.addWidget(self._block)
 
         header = QHBoxLayout()
         label = QLabel("CÁMARA · VISTA RECTIFICADA", page)
@@ -68,11 +88,20 @@ class LiveView(QWidget):
         self._camera = CameraView("rectified", page)
         layout.addWidget(self._camera)
 
+        moves_label = QLabel("ÚLTIMAS JUGADAS", page)
+        moves_label.setObjectName("sectionLabel")
+        layout.addWidget(moves_label)
+        self._moves = MovesList(4, page)
+        layout.addWidget(self._moves)
+
         actions = QHBoxLayout()
         recalibrate = QPushButton("Recalibrar", page)
         recalibrate.setCursor(Qt.CursorShape.PointingHandCursor)
         recalibrate.clicked.connect(self.recalibrate_requested.emit)
+        export = QPushButton("Exportar PGN", page)
+        export.clicked.connect(self.export_pgn)
         actions.addWidget(recalibrate)
+        actions.addWidget(export)
         actions.addStretch(1)
         layout.addLayout(actions)
         layout.addStretch(1)
@@ -81,14 +110,47 @@ class LiveView(QWidget):
         bridge.frames_ready.connect(self._on_frames)
         bridge.occupancy.connect(self._on_occupancy)
         bridge.initial_check.connect(self._on_initial_check)
-        bridge.calibration_changed.connect(
-            lambda event: (
-                self._camera.set_a1(event.calibration.a1_corner) if event.calibration else None
-            )
-        )
+        bridge.driver_state.connect(self._on_state)
+        bridge.game_info.connect(self._on_info)
+        bridge.pending_changed.connect(self._on_pending)
+        bridge.position_mismatch.connect(self._on_mismatch)
+        bridge.adapter_error.connect(self._on_error)
+        bridge.calibration_changed.connect(self._on_calibration)
+
+    # ---- actions ---------------------------------------------------------
+
+    def _new_game(self) -> None:
+        if self._runtime.session:
+            self._runtime.session.new_game()
+
+    def _end_game(self) -> None:
+        if self._runtime.session:
+            self._runtime.session.end_game()
+
+    def _resync(self) -> None:
+        if self._runtime.session:
+            self._runtime.session.resync()
+
+    def _promotion(self, piece: int) -> None:
+        if self._runtime.session:
+            self._runtime.session.set_promotion(piece)
+
+    def export_pgn(self) -> None:
+        session = self._runtime.session
+        path = session.export_pgn() if session else None
+        if path is None:
+            QMessageBox.information(self, "Exportar PGN", "Todavía no hay jugadas para exportar.")
+        else:
+            QMessageBox.information(self, "Exportar PGN", f"Guardado en:\n{path}")
+
+    # ---- updates ---------------------------------------------------------
 
     def set_health(self, state: HealthState) -> None:
         self._strip.set_state(state)
+
+    def _on_calibration(self, event: CalibrationChanged) -> None:
+        if event.calibration is not None:
+            self._camera.set_a1(event.calibration.a1_corner)
 
     def _on_frames(self, frames: UiFrames) -> None:
         self._camera.set_frames(frames.raw, frames.rectified)
@@ -99,20 +161,44 @@ class LiveView(QWidget):
             f"{event.mean_confidence:.0%}" + ("" if event.stable else " · MOVIENDO")
         )
 
-    def _on_initial_check(self, check: InitialPositionCheck) -> None:
-        if check.complete:
-            self._status_title.setText("Posición inicial · 32 / 32")
-            self._status_detail.setText(
-                "Hacé la primera jugada en el tablero. "
-                "(El seguimiento de jugadas llega en el hito H2.)"
+    def _on_state(self, state: DriverState) -> None:
+        self._state = state
+        self._block.set_state(state)
+        if state.state not in KEEP_HIGHLIGHTS:
+            self._camera.set_highlights(self._last_move_highlights())
+
+    def _on_info(self, info: GameInfo) -> None:
+        self._info = info
+        self._block.set_info(info)
+        self._moves.set_info(info)
+        if self._state and self._state.phase == Phase.IN_GAME:
+            self._camera.set_highlights(self._last_move_highlights())
+
+    def _on_pending(self, event: PendingOpponentChanged) -> None:
+        self._block.set_pending(event.pending)
+        if event.pending is not None:
+            self._camera.set_highlights(
+                {event.pending.from_square: "origin", event.pending.to_square: "destination"}
             )
+
+    def _on_mismatch(self, event: PositionMismatch) -> None:
+        self._camera.set_highlights({issue.square: "error" for issue in event.issues})
+
+    def _on_error(self, event: AdapterError) -> None:
+        QMessageBox.warning(self, "ChessOptic", event.message)
+
+    def _on_initial_check(self, check: InitialPositionCheck) -> None:
+        if self._state is not None and self._state.phase == Phase.IN_GAME:
+            return
+        if check.complete:
             self._camera.set_highlights({})
             return
-        self._status_title.setText(f"Tablero · blancas {check.white}/16 · negras {check.black}/16")
-        names = ", ".join(
-            chess.square_name(s) for s in (check.missing + check.extra + check.wrong_color)[:8]
-        )
-        self._status_detail.setText(f"Casillas que no coinciden con la posición inicial: {names}.")
         highlights = {sq: "missing" for sq in check.missing}
         highlights.update({sq: "error" for sq in check.extra + check.wrong_color})
         self._camera.set_highlights(highlights)
+
+    def _last_move_highlights(self) -> dict[int, str]:
+        if not self._info or not self._info.moves:
+            return {}
+        move = chess.Move.from_uci(self._info.moves[-1].uci)
+        return {move.from_square: "origin", move.to_square: "destination"}
