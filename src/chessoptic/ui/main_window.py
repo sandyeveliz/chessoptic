@@ -19,6 +19,7 @@ from chessoptic.core.runtime import CoreRuntime
 from chessoptic.game.notation import set_display_language
 from chessoptic.ui.bridge import CoreBridge
 from chessoptic.ui.views.camera_tab import CameraTab
+from chessoptic.ui.views.home import HomeView
 from chessoptic.ui.views.live import LiveView
 from chessoptic.ui.views.log_tab import LogTab
 from chessoptic.ui.views.settings_tab import SettingsTab
@@ -28,6 +29,7 @@ from chessoptic.ui.widgets.health_pill import HealthPill
 from chessoptic.ui.widgets.nav_bar import NavBar
 
 MIN_WIDTH = 300
+PAGE_HOME, PAGE_LIVE, PAGE_CAMERA, PAGE_LOG, PAGE_SETTINGS = range(5)
 DEFAULT_WIDTH = 380
 
 
@@ -67,10 +69,9 @@ class MainWindow(QMainWindow):
         self._modes = QStackedWidget(root)
         layout.addWidget(self._modes, 1)
 
-        self._shell_shown = False
         self._wizard = WizardView(runtime, self._bridge, self)
-        self._wizard.finished.connect(self._show_shell)
-        self._wizard.cancelled.connect(self._show_shell)
+        self._wizard.finished.connect(lambda: self._show_shell(PAGE_LIVE))
+        self._wizard.cancelled.connect(lambda: self._show_shell(PAGE_HOME))
         self._modes.addWidget(self._wizard)
 
         shell = QWidget(self)
@@ -78,6 +79,11 @@ class MainWindow(QMainWindow):
         shell_layout.setContentsMargins(0, 0, 0, 0)
         shell_layout.setSpacing(0)
         self._pages = QStackedWidget(shell)
+        self._home = HomeView(runtime, self._bridge, self._voice, shell)
+        self._home.play_requested.connect(lambda: self.show_page(PAGE_LIVE))
+        self._home.calibrate_requested.connect(lambda: self.start_wizard(0))
+        self._home.recheck_requested.connect(lambda: self.start_wizard(3))
+        self._home.settings_requested.connect(lambda: self.show_page(PAGE_SETTINGS))
         self._live = LiveView(runtime, self._bridge, shell)
         self._live.recalibrate_requested.connect(lambda: self.start_wizard(1))
         self._camera_tab = CameraTab(runtime, self._bridge, shell)
@@ -88,13 +94,14 @@ class MainWindow(QMainWindow):
         self._settings_tab = SettingsTab(runtime, self._voice, shell)
         self._settings_tab.always_on_top_changed.connect(self.set_always_on_top)
         self._settings_tab.provider_changed.connect(lambda name: runtime.start_session(name))
+        self._pages.addWidget(self._home)
         self._pages.addWidget(self._live)
         self._pages.addWidget(self._camera_tab)
         self._pages.addWidget(self._log_tab)
         self._pages.addWidget(self._settings_tab)
         shell_layout.addWidget(self._pages, 1)
         self._nav = NavBar(shell)
-        self._nav.page_selected.connect(self._pages.setCurrentIndex)
+        self._nav.page_selected.connect(self.show_page)
         shell_layout.addWidget(self._nav)
         self._modes.addWidget(shell)
 
@@ -102,7 +109,9 @@ class MainWindow(QMainWindow):
         self._bridge.health_changed.connect(self.set_health)
         self.set_always_on_top(self._config.window.always_on_top)
         self._restore_geometry()
-        self.start_wizard(0)
+        # Open on 'Inicio': calibrating is only required to play, not to look around.
+        self._show_shell(PAGE_HOME)
+        self._home.open_saved_camera()
 
     # ---- building blocks -------------------------------------------------
 
@@ -128,16 +137,19 @@ class MainWindow(QMainWindow):
     # ---- modes -------------------------------------------------------------
 
     def start_wizard(self, step: int) -> None:
-        # Once the app has been shown, the wizard is a detour: it can always be left.
-        cancellable = self._shell_shown
+        # The app always opens on 'Inicio', so the wizard is a detour that can be left.
         self._modes.setCurrentIndex(0)
-        self._wizard.start(step, cancellable=cancellable)
+        self._wizard.start(step, cancellable=True)
 
-    def _show_shell(self) -> None:
-        self._shell_shown = True
+    def _show_shell(self, page: int = PAGE_HOME) -> None:
         self._modes.setCurrentIndex(1)
-        self._nav.select(0)
-        self._pages.setCurrentIndex(0)
+        self.show_page(page)
+
+    def show_page(self, page: int) -> None:
+        self._nav.select(page)
+        self._pages.setCurrentIndex(page)
+        if page == PAGE_HOME:
+            self._home.refresh()
 
     # ---- public API --------------------------------------------------------
 

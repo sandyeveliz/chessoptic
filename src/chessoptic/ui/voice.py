@@ -64,6 +64,10 @@ class MoveVoice(QObject):
         wanted = _QT_LANGUAGE[normalize_language(language)]
         return [v.name() for v in self._tts.availableVoices() if v.locale().language() == wanted]
 
+    def voice_name(self) -> str | None:
+        """The voice in use, or None when there's no engine."""
+        return self._tts.voice().name() if self._tts is not None else None
+
     def configure(self, language: str, voice_name: str | None) -> None:
         """Pick the named voice, or the first one for the language, or leave the default."""
         self._language = normalize_language(language)
