@@ -71,6 +71,8 @@ Criterio: una persona que no conoce el proyecto entiende en un minuto qué es y 
 
 ### PR 2 — Spike: ChessOptic como tablero DGT por puerto serie virtual (3–5 días, con fecha de corte)
 
+> Relevamiento previo (qué pide el protocolo, qué tenemos, qué falta, qué queda de nuestro lado): [`DGT-EMULATION.md`](DGT-EMULATION.md).
+
 Objetivo único: responder sí/no a la pregunta de §0 con evidencia, y dejar escrito el pedido.
 
 1. Escribir `adapters/eboard/dgt.py`: emulador del protocolo serie DGT (reset, volcado de tablero con códigos de pieza, modo actualización por casilla, número de serie y versión) alimentado por la posición del `BoardModel`. Es pequeño y está bien documentado por drivers abiertos.
