@@ -69,6 +69,8 @@ Sin tests automáticos todavía (decisión de la fase POC, ver `CLAUDE.md`); lin
 
 Ideas, issues y PRs son bienvenidos. Si tenés un tablero y una cámara distintos, lo más útil es contar cómo te fue con el asistente y, si algo se lee mal, los archivos que ChessOptic deja en la carpeta `debug` de sus datos.
 
+El flujo es fork → rama → PR contra `main`; los detalles están en [`CONTRIBUTING.md`](CONTRIBUTING.md). Para reportar una vulnerabilidad, seguí [`SECURITY.md`](SECURITY.md) (por canal privado, no en un issue).
+
 ## Licencia
 
 [Apache-2.0](LICENSE). Fuentes Sora e IBM Plex bajo [SIL Open Font License](src/chessoptic/assets/fonts/).
