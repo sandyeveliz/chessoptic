@@ -4,6 +4,8 @@ La v0.1 cerró el POC: una partida completa contra Stockfish con piezas físicas
 
 ## v0.2 — Partidas locales completas
 
+> Plan detallado, con la investigación de Chessconnect y el orden de PRs: [`PLAN-v0.2.md`](PLAN-v0.2.md).
+
 Objetivo: que jugar contra el motor sea una experiencia de verdad, no una demo.
 
 | Qué | Estado hoy | Qué falta |
