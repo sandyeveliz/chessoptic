@@ -53,7 +53,9 @@ class MainWindow(QMainWindow):
         self._bridge = CoreBridge(runtime.bus, self)
         set_display_language(self._config.notation_language)
         self._voice = MoveVoice(self)
-        self._voice.configure(self._config.notation_language, self._config.voice_name)
+        self._voice.configure(
+            self._config.voice_engine, self._config.notation_language, self._config.voice_id()
+        )
         self._bridge.opponent_move.connect(self._on_opponent_move)
         self.setWindowTitle("ChessOptic")
         self.setMinimumWidth(MIN_WIDTH)
@@ -199,5 +201,6 @@ class MainWindow(QMainWindow):
         win.x, win.y = geometry.x(), geometry.y()
         win.width, win.height = geometry.width(), geometry.height()
         save_config(self._config)
+        self._voice.shutdown()
         self._runtime.shutdown()
         super().closeEvent(event)
