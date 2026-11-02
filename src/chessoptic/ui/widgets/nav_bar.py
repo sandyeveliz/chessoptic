@@ -1,4 +1,4 @@
-"""Bottom navigation: En vivo · Cámara · Log · Ajustes."""
+"""Bottom navigation: Inicio · En vivo · Cámara · Log · Ajustes."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QSizePolicy, QToolButton, QWidget
 
 NAV_ITEMS: tuple[tuple[str, str], ...] = (
+    ("home", "Inicio"),
     ("live", "En vivo"),
     ("camera", "Cámara"),
     ("log", "Log"),

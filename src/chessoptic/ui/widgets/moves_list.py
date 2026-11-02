@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QWidget
 
 from chessoptic.core.events import GameInfo, MoveRecord, PendingOpponentMove
+from chessoptic.game.notation import display_san
 from chessoptic.ui.theme import TOKENS
 
 
@@ -20,9 +21,10 @@ def _chip(text: str, background: str, color: str = "#FFFFFF") -> str:
 def _san_html(rec: MoveRecord | None, latest: bool) -> str:
     if rec is None:
         return ""
+    san = display_san(rec.san)
     if rec.source == "pending":
-        return _chip(rec.san, TOKENS.warn)
-    return _chip(rec.san, TOKENS.turn) if latest else rec.san
+        return _chip(san, TOKENS.warn)
+    return _chip(san, TOKENS.turn) if latest else san
 
 
 class MovesList(QFrame):

@@ -10,7 +10,8 @@ Copia de referencia en este repo: [`docs/design/`](design/), un `.dc.html` por p
 - Panel lateral angosto: **380 px** de ancho de diseño (mínimo usable ~300 px), alto completo de pantalla. Redimensionable; el contenido se apila en una columna.
 - Opción "Siempre arriba".
 - **Modo compacto**: 380 × 260 px aprox. (ver `Compacto.dc.html`).
-- Navegación inferior con 4 pestañas: **En vivo · Cámara · Log · Ajustes**. Durante el asistente de primer uso no se muestra.
+- Navegación inferior con 5 pestañas: **Inicio · En vivo · Cámara · Log · Ajustes**. Durante el asistente no se muestra.
+- La app abre siempre en **Inicio** (`ui/views/home.py`, mockups `HomeSinCalibrar` y `HomeListo`): estado de cámara, calibración, detección, rival y voz, cada uno con su acción. Solo **Jugar** exige la cámara calibrada; el asistente se abre desde ahí y siempre se puede salir con Atrás.
 
 ## 2. Tokens visuales
 

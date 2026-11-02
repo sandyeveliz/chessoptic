@@ -29,7 +29,7 @@ from chessoptic.core.events import (
     SetupCheckReport,
     StabilityEvent,
 )
-from chessoptic.game.session import PendingOpponentChanged
+from chessoptic.game.session import OpponentMovePlayed, PendingOpponentChanged
 
 
 @dataclass(frozen=True)
@@ -60,6 +60,7 @@ class CoreBridge(QObject):
     driver_state = Signal(object)
     game_info = Signal(object)
     pending_changed = Signal(object)
+    opponent_move = Signal(str)
     log_entry = Signal(object)
     adapter_error = Signal(object)
     position_mismatch = Signal(object)
@@ -81,6 +82,7 @@ class CoreBridge(QObject):
         bus.subscribe(DriverState, self.driver_state.emit)
         bus.subscribe(GameInfo, self.game_info.emit)
         bus.subscribe(PendingOpponentChanged, self.pending_changed.emit)
+        bus.subscribe(OpponentMovePlayed, lambda e: self.opponent_move.emit(e.san))
         bus.subscribe(LogEntry, self.log_entry.emit)
         bus.subscribe(AdapterError, self.adapter_error.emit)
         bus.subscribe(PositionMismatch, self.position_mismatch.emit)

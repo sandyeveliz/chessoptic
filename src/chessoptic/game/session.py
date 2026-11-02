@@ -367,6 +367,7 @@ class GameSession:
                     record = self._record(event.move.uci(), san, "opponent")
                     self._last_opponent = record.san
                     self._log("move", f"rival {record.san} · {ended[1]}")
+                    self._bus.publish(OpponentMovePlayed(record.san))
                     self._publish_info()
                     self._on_adapter_event(GameOver(ended[0], ended[1]))
                     return
@@ -374,6 +375,7 @@ class GameSession:
                 self._pending_opponent = self._describe(event.move, event.san)
                 self._publish_pending(self._pending_opponent)
                 self._log("move", f"rival {event.san} · recibida")
+                self._bus.publish(OpponentMovePlayed(event.san))
                 self._set_state(DriverStateName.REPLAY, event.san)
             elif isinstance(event, GameOver):
                 self._result = event.result
@@ -495,3 +497,10 @@ class PendingOpponentChanged:
     """Bus payload for 'pending opponent move changed' (None clears it)."""
 
     pending: PendingOpponentMove | None
+
+
+@dataclass(frozen=True)
+class OpponentMovePlayed:
+    """Bus payload: the opponent just played this move (SAN), e.g. to read it aloud."""
+
+    san: str

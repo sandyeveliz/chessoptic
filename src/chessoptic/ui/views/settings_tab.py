@@ -21,7 +21,14 @@ from PySide6.QtWidgets import (
 from chessoptic.adapters import AVAILABLE
 from chessoptic.core.config import save_config
 from chessoptic.core.runtime import CoreRuntime
+from chessoptic.game.notation import (
+    LANGUAGES,
+    localize_san,
+    random_example_san,
+    set_display_language,
+)
 from chessoptic.ui.theme import user_theme_path
+from chessoptic.ui.voice import MoveVoice
 
 PROMOTION_OPTIONS: tuple[tuple[str, str], ...] = (
     ("ask", "Preguntar"),
@@ -56,9 +63,12 @@ class SettingsTab(QWidget):
     always_on_top_changed = Signal(bool)
     provider_changed = Signal(str)
 
-    def __init__(self, runtime: CoreRuntime, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, runtime: CoreRuntime, voice: MoveVoice, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self._runtime = runtime
+        self._voice = voice
         config = runtime.config
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -124,6 +134,36 @@ class SettingsTab(QWidget):
         self._color.currentIndexChanged.connect(self._on_color)
         _row(sf_layout, "Jugás con", self._color)
         self._refresh_stockfish_status()
+
+        # ---- notation and voice
+        _, voice_layout = _group(page, "Jugadas y voz")
+        self._notation = QComboBox(page)
+        for key, label in LANGUAGES:
+            self._notation.addItem(label, key)
+        self._notation.setCurrentIndex(max(0, self._notation.findData(config.notation_language)))
+        self._notation.currentIndexChanged.connect(self._on_notation)
+        _row(voice_layout, "Notación", self._notation)
+        self._speak = QCheckBox("Decir en voz alta la jugada del rival", page)
+        self._speak.setChecked(config.speak_opponent_moves)
+        self._speak.toggled.connect(self._on_speak)
+        voice_layout.addWidget(self._speak)
+        self._voice_combo = QComboBox(page)
+        self._voice_combo.currentIndexChanged.connect(self._on_voice)
+        _row(voice_layout, "Voz", self._voice_combo)
+        self._voice_status = QLabel("", page)
+        self._voice_status.setObjectName("muted")
+        self._voice_status.setWordWrap(True)
+        voice_layout.addWidget(self._voice_status)
+        test_row = QHBoxLayout()
+        self._voice_sample = QLabel("Probá con una jugada al azar.", page)
+        self._voice_sample.setObjectName("muted")
+        self._voice_sample.setWordWrap(True)
+        test_row.addWidget(self._voice_sample, 1)
+        test = QPushButton("Probar", page)
+        test.clicked.connect(self._test_voice)
+        test_row.addWidget(test)
+        voice_layout.addLayout(test_row)
+        self._fill_voices()
 
         # ---- detection
         _, detection_layout = _group(page, "Detección")
@@ -231,6 +271,49 @@ class SettingsTab(QWidget):
     def _on_promotion(self, index: int) -> None:
         self._runtime.config.promotion_default = str(self._promotion.itemData(index))
         save_config(self._runtime.config)
+
+    def _fill_voices(self) -> None:
+        config = self._runtime.config
+        self._voice_combo.blockSignals(True)
+        self._voice_combo.clear()
+        self._voice_combo.addItem("Automática", None)
+        for name in self._voice.voices(config.notation_language):
+            self._voice_combo.addItem(name, name)
+        self._voice_combo.setCurrentIndex(max(0, self._voice_combo.findData(config.voice_name)))
+        self._voice_combo.setEnabled(self._voice.available)
+        self._voice_combo.blockSignals(False)
+        self._apply_voice()
+
+    def _apply_voice(self) -> None:
+        config = self._runtime.config
+        self._voice.configure(config.notation_language, config.voice_name)
+        status = self._voice.status()
+        self._voice_status.setText(status)
+        self._voice_status.setVisible(bool(status))
+
+    def _on_notation(self, index: int) -> None:
+        config = self._runtime.config
+        config.notation_language = str(self._notation.itemData(index))
+        config.voice_name = None  # voices are per language
+        save_config(config)
+        set_display_language(config.notation_language)
+        self._fill_voices()
+
+    def _on_speak(self, enabled: bool) -> None:
+        self._runtime.config.speak_opponent_moves = enabled
+        save_config(self._runtime.config)
+
+    def _on_voice(self, index: int) -> None:
+        data = self._voice_combo.itemData(index)
+        self._runtime.config.voice_name = str(data) if data else None
+        save_config(self._runtime.config)
+        self._apply_voice()
+
+    def _test_voice(self) -> None:
+        san = random_example_san()
+        phrase = self._voice.say_move(san)
+        shown = localize_san(san, self._runtime.config.notation_language)
+        self._voice_sample.setText(f"{shown} · «{phrase}»")
 
     def _on_stability_preview(self, value: int) -> None:
         self._stability_hint.setText(

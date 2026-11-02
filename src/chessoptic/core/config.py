@@ -57,6 +57,9 @@ class AppConfig:
     stockfish_level: int = 4  # 1-8, see adapters/local/stockfish.py
     my_color: str = "white"  # colour against a local engine
     promotion_default: str = "ask"
+    notation_language: str = "es"  # "es" | "en": piece letters shown and spoken
+    speak_opponent_moves: bool = True
+    voice_name: str | None = None  # None = first installed voice for the language
     window: WindowConfig = field(default_factory=WindowConfig)
 
 

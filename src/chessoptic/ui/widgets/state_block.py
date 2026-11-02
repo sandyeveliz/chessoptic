@@ -28,6 +28,7 @@ from chessoptic.core.events import (
     PendingOpponentMove,
     Phase,
 )
+from chessoptic.game.notation import display_san
 from chessoptic.ui.theme import TOKENS
 
 VARIANT_STYLE: dict[str, str] = {
@@ -246,7 +247,7 @@ class StateBlock(QFrame):
             last = ""
             if info is not None and info.moves:
                 rec = info.moves[-1]
-                last = f"Última: {rec.number}{'.' if rec.color else '…'} {rec.san}"
+                last = f"Última: {rec.number}{'.' if rec.color else '…'} {display_san(rec.san)}"
             self._detail.setText(last or "Hacé tu jugada en el tablero.")
             self._set_buttons([("Terminar", self.end_game.emit, False)])
         elif name == DriverStateName.OPPONENT_TURN:
@@ -254,14 +255,16 @@ class StateBlock(QFrame):
             self._label.setText("TURNO DEL RIVAL")
             self._title.setText("Esperando…")
             sent = info.last_sent if info else None
-            self._detail.setText(f"Tu jugada: {sent} · enviada y aceptada" if sent else detail)
+            self._detail.setText(
+                f"Tu jugada: {display_san(sent)} · enviada y aceptada" if sent else detail
+            )
             self._set_buttons([("Terminar", self.end_game.emit, False)])
         elif name in (DriverStateName.REPLAY, DriverStateName.VERIFYING):
             self._apply_variant("replay")
             self._label.setText("RIVAL JUGÓ · REPRODUCILA EN EL TABLERO")
             pending = self._pending
             self._title.setText("")
-            self._big.setText(pending.san if pending else detail)
+            self._big.setText(display_san(pending.san) if pending else detail)
             self._big.show()
             self._detail.setText(pending.human_text if pending else "")
             self._set_buttons([("Terminar", self.end_game.emit, False)])
@@ -285,7 +288,9 @@ class StateBlock(QFrame):
             self._label.setText("⚠ LA POSICIÓN NO COINCIDE")
             self._title.setText("Revisá las casillas marcadas")
             pending_text = (
-                f" Jugada del rival pendiente: {self._pending.san}." if self._pending else ""
+                f" Jugada del rival pendiente: {display_san(self._pending.san)}."
+                if self._pending
+                else ""
             )
             self._detail.setText(
                 (
@@ -308,7 +313,7 @@ class StateBlock(QFrame):
             result = info.result if info and info.result else ""
             self._title.setText(result or "Fin de partida")
             moves = len(info.moves) if info else 0
-            last = f" Última: {info.moves[-1].san}." if info and info.moves else ""
+            last = f" Última: {display_san(info.moves[-1].san)}." if info and info.moves else ""
             self._detail.setText(
                 f"{detail} · {moves} jugadas.{last} Reordená el tablero para la próxima."
             )
