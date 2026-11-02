@@ -58,7 +58,8 @@ def _install_packages(packages: tuple[str, ...], progress: Progress) -> None:
     command = package_command(packages)
     progress(f"Instalando {', '.join(packages)}…", -1.0)
     log.info("installing packages: %s", " ".join(command))
-    flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    # Windows-only flag (no console flashing); getattr keeps mypy happy on other OSes.
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     result = subprocess.run(
         command, capture_output=True, text=True, creationflags=flags, check=False
     )
