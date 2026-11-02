@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSlider,
@@ -147,9 +148,44 @@ class SettingsTab(QWidget):
         self._speak.setChecked(config.speak_opponent_moves)
         self._speak.toggled.connect(self._on_speak)
         voice_layout.addWidget(self._speak)
+        self._engine = QComboBox(page)
+        for engine in voice.engines():
+            suffix = " (descargable)" if engine.downloadable else ""
+            self._engine.addItem(engine.label + suffix, engine.name)
+        self._engine.setCurrentIndex(max(0, self._engine.findData(config.voice_engine)))
+        self._engine.currentIndexChanged.connect(self._on_engine)
+        _row(voice_layout, "Motor", self._engine)
+        self._engine_info = QLabel("", page)
+        self._engine_info.setObjectName("muted")
+        self._engine_info.setWordWrap(True)
+        voice_layout.addWidget(self._engine_info)
         self._voice_combo = QComboBox(page)
         self._voice_combo.currentIndexChanged.connect(self._on_voice)
         _row(voice_layout, "Voz", self._voice_combo)
+        download_row = QHBoxLayout()
+        self._download = QPushButton("Descargar", page)
+        self._download.setProperty("primary", "true")
+        self._download.clicked.connect(self._start_download)
+        self._cancel_download = QPushButton("Cancelar", page)
+        self._cancel_download.clicked.connect(voice.cancel_install)
+        download_row.addWidget(self._download, 1)
+        download_row.addWidget(self._cancel_download)
+        voice_layout.addLayout(download_row)
+        self._download_bar = QProgressBar(page)
+        self._download_bar.setTextVisible(False)
+        self._download_bar.setFixedHeight(6)
+        voice_layout.addWidget(self._download_bar)
+        self._download_text = QLabel("", page)
+        self._download_text.setObjectName("muted")
+        self._download_text.setWordWrap(True)
+        voice_layout.addWidget(self._download_text)
+        self._license = QLabel("", page)
+        self._license.setObjectName("muted")
+        self._license.setWordWrap(True)
+        self._license.setStyleSheet("font-size: 11px;")
+        voice_layout.addWidget(self._license)
+        voice.install_progress.connect(self._on_download_progress)
+        voice.install_finished.connect(self._on_download_finished)
         self._voice_status = QLabel("", page)
         self._voice_status.setObjectName("muted")
         self._voice_status.setWordWrap(True)
@@ -274,19 +310,37 @@ class SettingsTab(QWidget):
 
     def _fill_voices(self) -> None:
         config = self._runtime.config
+        self._voice.configure(config.voice_engine, config.notation_language, config.voice_id())
         self._voice_combo.blockSignals(True)
         self._voice_combo.clear()
-        self._voice_combo.addItem("Automática", None)
-        for name in self._voice.voices(config.notation_language):
-            self._voice_combo.addItem(name, name)
-        self._voice_combo.setCurrentIndex(max(0, self._voice_combo.findData(config.voice_name)))
-        self._voice_combo.setEnabled(self._voice.available)
+        if self._voice.engine == "system":
+            self._voice_combo.addItem("Automática", None)
+        for option in self._voice.voice_options():
+            label = option.label if option.ready else f"{option.label} · {option.size_mb} MB"
+            self._voice_combo.addItem(label, option.id)
+        current = self._voice_combo.findData(config.voice_id())
+        self._voice_combo.setCurrentIndex(max(0, current))
+        self._voice_combo.setEnabled(self._voice.available and self._voice_combo.count() > 0)
         self._voice_combo.blockSignals(False)
         self._apply_voice()
 
     def _apply_voice(self) -> None:
         config = self._runtime.config
-        self._voice.configure(config.notation_language, config.voice_name)
+        self._voice.configure(config.voice_engine, config.notation_language, config.voice_id())
+        engine = next(e for e in self._voice.engines() if e.name == self._voice.engine)
+        self._engine_info.setText(engine.description)
+        self._license.setText(engine.license_note)
+        self._license.setVisible(bool(engine.license_note))
+        pending = self._voice.pending_download()
+        installing = self._voice.installing
+        self._download.setVisible(pending is not None or installing)
+        self._download.setEnabled(not installing)
+        if pending is not None:
+            what = "motor y voz" if pending.packages else "voz"
+            self._download.setText(f"Descargar {what} (~{pending.size_mb} MB)")
+        self._cancel_download.setVisible(installing)
+        self._download_bar.setVisible(installing)
+        self._download_text.setVisible(installing or bool(self._download_text.text()))
         status = self._voice.status()
         self._voice_status.setText(status)
         self._voice_status.setVisible(bool(status))
@@ -294,10 +348,35 @@ class SettingsTab(QWidget):
     def _on_notation(self, index: int) -> None:
         config = self._runtime.config
         config.notation_language = str(self._notation.itemData(index))
-        config.voice_name = None  # voices are per language
         save_config(config)
         set_display_language(config.notation_language)
         self._fill_voices()
+
+    def _on_engine(self, index: int) -> None:
+        self._runtime.config.voice_engine = str(self._engine.itemData(index))
+        save_config(self._runtime.config)
+        self._download_text.setText("")
+        self._fill_voices()
+
+    def _start_download(self) -> None:
+        self._download_text.setText("Preparando la descarga…")
+        self._download_bar.setRange(0, 0)
+        self._voice.start_install()
+        self._apply_voice()
+
+    def _on_download_progress(self, text: str, fraction: float) -> None:
+        if fraction < 0:
+            self._download_bar.setRange(0, 0)  # busy indicator
+        else:
+            self._download_bar.setRange(0, 1000)
+            self._download_bar.setValue(int(fraction * 1000))
+        self._download_text.setText(text)
+
+    def _on_download_finished(self, ok: bool, message: str) -> None:
+        self._download_text.setText(message)
+        self._fill_voices()
+        if ok:
+            self._test_voice()
 
     def _on_speak(self, enabled: bool) -> None:
         self._runtime.config.speak_opponent_moves = enabled
@@ -305,7 +384,8 @@ class SettingsTab(QWidget):
 
     def _on_voice(self, index: int) -> None:
         data = self._voice_combo.itemData(index)
-        self._runtime.config.voice_name = str(data) if data else None
+        self._runtime.config.set_voice_id(str(data) if data else None)
+        self._download_text.setText("")
         save_config(self._runtime.config)
         self._apply_voice()
 

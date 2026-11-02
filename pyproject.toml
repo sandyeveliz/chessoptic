@@ -17,6 +17,12 @@ dependencies = [
   "platformdirs>=4.0",
 ]
 
+[project.optional-dependencies]
+# Optional neural voices. The app installs them from Settings; these extras are for
+# installing up front (`uv sync --extra piper`). Both pull GPL-3.0 code (espeak-ng).
+piper = ["piper-tts>=1.3,<2"]
+kokoro = ["kokoro-onnx>=0.4,<1"]
+
 [project.scripts]
 chessoptic = "chessoptic.cli:main"
 
@@ -54,5 +60,5 @@ warn_unreachable = true
 pretty = true
 
 [[tool.mypy.overrides]]
-module = ["cv2", "cv2.*"]
+module = ["cv2", "cv2.*", "piper", "piper.*", "kokoro_onnx", "kokoro_onnx.*"]
 ignore_missing_imports = true

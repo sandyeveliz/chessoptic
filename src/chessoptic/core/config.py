@@ -59,8 +59,20 @@ class AppConfig:
     promotion_default: str = "ask"
     notation_language: str = "es"  # "es" | "en": piece letters shown and spoken
     speak_opponent_moves: bool = True
-    voice_name: str | None = None  # None = first installed voice for the language
+    voice_engine: str = "system"  # "system" | a chessoptic.speech engine name ("piper", ...)
+    voices: dict[str, str] = field(default_factory=dict)  # "<engine>/<lang>" -> voice id
     window: WindowConfig = field(default_factory=WindowConfig)
+
+    def voice_id(self) -> str | None:
+        """Chosen voice for the current engine and notation language (None = automatic)."""
+        return self.voices.get(f"{self.voice_engine}/{self.notation_language}")
+
+    def set_voice_id(self, voice_id: str | None) -> None:
+        key = f"{self.voice_engine}/{self.notation_language}"
+        if voice_id:
+            self.voices[key] = voice_id
+        else:
+            self.voices.pop(key, None)
 
 
 def _from_dict[T](cls: type[T], data: Any) -> T:

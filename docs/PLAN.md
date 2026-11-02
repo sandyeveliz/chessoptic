@@ -55,6 +55,7 @@ No es una app de ajedrez. **Es el driver de un tablero virtual.** El ajedrez se 
 | Modos de juego | **Strategy**: el modo base es sin reloj; bullet/blitz/rápidas y otros vienen después, cada uno con su configuración | Hacer andar la detección antes que el reloj. |
 | Fase actual (2026-10-29) | **POC sin tests automáticos** hasta que la v1 funcione; CI solo lint + tipos. Orden e hitos en [`IMPLEMENTATION.md`](IMPLEMENTATION.md) | Ir rápido. La arquitectura (fuentes de frames inyectables, núcleo sin Qt) deja los tests posibles para después. |
 | Arranque (2026-10-31) | La app abre en **Inicio** con el estado de cámara, calibración, detección, rival y voz; la calibración solo es obligatoria para **Jugar** | Poder revisar ajustes, probar la voz o mirar el log sin calibrar cada vez que se abre. |
+| Voz (2026-11-02) | Por defecto, las voces del sistema (Qt TextToSpeech). **Piper** y **Kokoro** son opcionales: se descargan desde Ajustes, nunca se incluyen | Mejor calidad para quien la quiera sin sumar peso ni código GPL-3.0 (Piper, espeak-ng) a la distribución Apache-2.0. |
 | Sin backend web / sin extensión propia | Descartado | Una UI en el navegador no puede abrir puertos ni emular BLE, y automatizar el DOM de chess.com tiene riesgo de ToS. |
 
 ### Descartado y por qué (para no volver a discutirlo)
